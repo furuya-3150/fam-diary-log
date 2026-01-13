@@ -1,0 +1,318 @@
+package controller
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
+	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
+	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/mock"
+)
+
+type MockDiaryUsecase struct {
+	mock.Mock
+}
+
+func (m *MockDiaryUsecase) Create(ctx context.Context, diary *domain.Diary) (*domain.Diary, error) {
+	args := m.Called(ctx, diary)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Diary), args.Error(1)
+}
+
+func (m *MockDiaryUsecase) List(ctx context.Context, criteria *domain.DiarySearchCriteria) ([]*domain.Diary, error) {
+	args := m.Called(ctx, criteria)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.Diary), args.Error(1)
+}
+
+
+// diary created successfully
+func TestDiaryController_Create_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	diaryID := uuid.New()
+	familyID := uuid.New()
+	userID := uuid.New()
+
+	inputDiary := &domain.Diary{
+		FamilyID: familyID,
+		UserID:   userID,
+		Title:    "Test Diary",
+		Content:  "This is a test diary",
+	}
+
+	expectedDiary := &domain.Diary{
+		ID:        diaryID,
+		FamilyID:  familyID,
+		UserID:    userID,
+		Title:     "Test Diary",
+		Content:   "This is a test diary",
+		CreatedAt: time.Now(),
+	}
+
+	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
+		return d.Title == inputDiary.Title && d.Content == inputDiary.Content
+	})).Return(expectedDiary, nil)
+
+	// Call controller
+	result, err := controller.Create(context.Background(), inputDiary)
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.ID != diaryID {
+		t.Errorf("expected ID %v, got %v", diaryID, result.ID)
+	}
+
+	if result.Title != inputDiary.Title {
+		t.Errorf("expected title %q, got %q", inputDiary.Title, result.Title)
+	}
+
+	if result.Content != inputDiary.Content {
+		t.Errorf("expected content %q, got %q", inputDiary.Content, result.Content)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+
+// diary creation with validation error
+func TestDiaryController_Create_ValidationError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	inputDiary := &domain.Diary{
+		Title:   "",
+		Content: "Valid content",
+	}
+
+	validationErr := &errors.ValidationError{Message: "title cannot be empty"}
+	mockUsecase.On("Create", mock.Anything, mock.Anything).Return(nil, validationErr)
+
+	// Call controller
+	result, err := controller.Create(context.Background(), inputDiary)
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// diary creation with internal error
+func TestDiaryController_Create_InternalError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	inputDiary := &domain.Diary{
+		Title:   "Test Diary",
+		Content: "Valid content",
+	}
+
+	internalErr := &errors.InternalError{Message: "database error"}
+	mockUsecase.On("Create", mock.Anything, mock.Anything).Return(nil, internalErr)
+
+	// Call controller
+	result, err := controller.Create(context.Background(), inputDiary)
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected internal error")
+	}
+
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// dto conversion test
+func TestDiaryController_Create_DTOConversion(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	diaryID := uuid.New()
+	familyID := uuid.New()
+	userID := uuid.New()
+	createdAt := time.Now()
+
+	inputDiary := &domain.Diary{
+		ID:       diaryID,
+		FamilyID: familyID,
+		UserID:   userID,
+		Title:    "Test Diary",
+		Content:  "This is a test diary",
+	}
+
+	usecaseDiary := &domain.Diary{
+		ID:        diaryID,
+		FamilyID:  familyID,
+		UserID:    userID,
+		Title:     "Test Diary",
+		Content:   "This is a test diary",
+		CreatedAt: createdAt,
+	}
+
+	mockUsecase.On("Create", mock.Anything, mock.Anything).Return(usecaseDiary, nil)
+
+	// Call controller
+	result, err := controller.Create(context.Background(), inputDiary)
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+
+	// Verify DTO conversion
+	expectedDTO := &dto.DiaryResponse{
+		ID:        diaryID,
+		FamilyID:  familyID,
+		UserID:    userID,
+		Title:     "Test Diary",
+		Content:   "This is a test diary",
+		CreatedAt: createdAt,
+	}
+
+	if result.ID != expectedDTO.ID {
+		t.Errorf("expected ID %v, got %v", expectedDTO.ID, result.ID)
+	}
+
+	if result.FamilyID != expectedDTO.FamilyID {
+		t.Errorf("expected FamilyID %v, got %v", expectedDTO.FamilyID, result.FamilyID)
+	}
+
+	if result.UserID != expectedDTO.UserID {
+		t.Errorf("expected UserID %v, got %v", expectedDTO.UserID, result.UserID)
+	}
+
+	if result.Title != expectedDTO.Title {
+		t.Errorf("expected Title %q, got %q", expectedDTO.Title, result.Title)
+	}
+
+	if result.Content != expectedDTO.Content {
+		t.Errorf("expected Content %q, got %q", expectedDTO.Content, result.Content)
+	}
+
+	if result.CreatedAt != expectedDTO.CreatedAt {
+		t.Errorf("expected CreatedAt %v, got %v", expectedDTO.CreatedAt, result.CreatedAt)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// diary creation with cancelled context
+func TestDiaryController_Create_ContextCancelled(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	inputDiary := &domain.Diary{
+		Title:   "Test Diary",
+		Content: "Valid content",
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	ctxErr := &errors.InternalError{Message: "context cancelled"}
+	mockUsecase.On("Create", mock.MatchedBy(func(c context.Context) bool {
+		return c.Err() != nil
+	}), mock.Anything).Return(nil, ctxErr)
+
+	// Call controller
+	result, err := controller.Create(ctx, inputDiary)
+
+	// Verify result
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
+	}
+
+	t.Logf("error: %v", err)
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// diary creation with multiple calls independent
+func TestDiaryController_Create_MultipleCallsIndependent(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	diary1ID := uuid.New()
+	diary2ID := uuid.New()
+
+	diary1 := &domain.Diary{
+		ID:        diary1ID,
+		Title:     "First Diary",
+		Content:   "First content",
+		CreatedAt: time.Now(),
+	}
+
+	diary2 := &domain.Diary{
+		ID:        diary2ID,
+		Title:     "Second Diary",
+		Content:   "Second content",
+		CreatedAt: time.Now(),
+	}
+
+	// Setup expectations for both calls
+	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
+		return d.Title == "First Diary"
+	})).Return(diary1, nil).Once()
+
+	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
+		return d.Title == "Second Diary"
+	})).Return(diary2, nil).Once()
+
+	// Call controller twice
+	result1, err1 := controller.Create(context.Background(), &domain.Diary{Title: "First Diary", Content: "First content"})
+	result2, err2 := controller.Create(context.Background(), &domain.Diary{Title: "Second Diary", Content: "Second content"})
+
+	// Verify results
+	if err1 != nil {
+		t.Fatalf("First Create failed: %v", err1)
+	}
+
+	if err2 != nil {
+		t.Fatalf("Second Create failed: %v", err2)
+	}
+
+	if result1.ID != diary1ID {
+		t.Errorf("expected first ID %v, got %v", diary1ID, result1.ID)
+	}
+
+	if result2.ID != diary2ID {
+		t.Errorf("expected second ID %v, got %v", diary2ID, result2.ID)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
