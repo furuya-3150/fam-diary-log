@@ -1,0 +1,37 @@
+version: '3'
+
+volumes:
+  fam-diary-log-api_postgres-2:
+    driver: local
+
+services:
+  db:
+    image: postgres:16
+    volumes:
+      - fam-diary-log-api_postgres-2:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      # - POSTGRES_DB=${POSTGRES_DB}
+
+  go:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev # 環境ごとに変更
+    image: fam-diary-log-api:latest
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - GO_ENV=dev # 環境ごとに変更
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+    ports:
+      - 8080:8080
+    depends_on:
+      - db

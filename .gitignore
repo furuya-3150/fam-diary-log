@@ -1,0 +1,11 @@
+.env
+.DS_Store
+
+docker/*
+
+# TODO: ドキュメント整理後コミット
+doc/*
+README.md
+Makefile
+
+tmp/*
