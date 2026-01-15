@@ -10,9 +10,10 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/pagination"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/repository"
+	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 )
 
 type MockDiaryRepository struct {
@@ -371,4 +372,102 @@ func TestDiaryUsecaseCreateValidateCreateDiaryRequest(t *testing.T) {
 			}
 		})
 	}
+}
+
+// ------------
+// List Diaries
+// ------------
+
+// TestDiaryUsecaseListSuccess tests successful diary list retrieval
+func TestDiaryUsecaseListSuccess(t *testing.T) {
+	t.Parallel()
+
+	mockRepo := new(MockDiaryRepository)
+	mockTxManager := new(MockTransactionManager)
+
+	// テスト用の固定時刻を指定（2026-01-15, Thursday）
+	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
+	clk := &clock.Fixed{Time: fixedTime}
+
+	// Clock を注入
+	usecase := NewDiaryUsecaseWithClock(mockTxManager, mockRepo, clk)
+
+	familyID := uuid.New()
+	diaryID1 := uuid.New()
+	diaryID2 := uuid.New()
+	createdAt := time.Now()
+
+	expectedDiaries := []*domain.Diary{
+		{
+			ID:        diaryID1,
+			FamilyID:  familyID,
+			Title:     "Test Diary 1",
+			Content:   "Content 1",
+			CreatedAt: createdAt,
+		},
+		{
+			ID:        diaryID2,
+			FamilyID:  familyID,
+			Title:     "Test Diary 2",
+			Content:   "Content 2",
+			CreatedAt: createdAt.Add(-24 * time.Hour),
+		},
+	}
+
+	// 2026-01-15は木曜日なので、週は2026-01-12（月）から2026-01-18（日）
+	expectedStartDate := time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC)
+	expectedEndDate := time.Date(2026, 1, 18, 23, 59, 59, 999999999, time.UTC)
+	mockRepo.On("List", mock.Anything, mock.MatchedBy(func(criteria *domain.DiarySearchCriteria) bool {
+		return criteria.FamilyID == familyID &&
+			criteria.StartDate.Equal(expectedStartDate) &&
+			criteria.EndDate.Equal(expectedEndDate)
+	}), mock.Anything).Return(expectedDiaries, nil)
+
+	// Call usecase
+	result, err := usecase.List(context.Background(), familyID)
+
+	// Verify result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, len(expectedDiaries), len(result))
+	assert.Equal(t, diaryID1, result[0].ID)
+	assert.Equal(t, diaryID2, result[1].ID)
+
+	mockRepo.AssertExpectations(t)
+}
+
+// TestDiaryUsecaseListRepositoryError tests diary list with repository error
+func TestDiaryUsecaseListRepositoryError(t *testing.T) {
+	t.Parallel()
+
+	mockRepo := new(MockDiaryRepository)
+	mockTxManager := new(MockTransactionManager)
+
+	// テスト用の固定時刻を指定（2026-01-15, Thursday）
+	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
+	clk := &clock.Fixed{Time: fixedTime}
+
+	// Clock を注入
+	usecase := NewDiaryUsecaseWithClock(mockTxManager, mockRepo, clk)
+
+	familyID := uuid.New()
+
+	repositoryErr := &pkgerrors.InternalError{Message: "database error"}
+	expectedStartDate := time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC)
+	expectedEndDate := time.Date(2026, 1, 18, 23, 59, 59, 999999999, time.UTC)
+	mockRepo.On("List", mock.Anything, mock.MatchedBy(func(criteria *domain.DiarySearchCriteria) bool {
+		return criteria.FamilyID == familyID &&
+			criteria.StartDate.Equal(expectedStartDate) &&
+			criteria.EndDate.Equal(expectedEndDate)
+	}), mock.Anything).Return(nil, repositoryErr)
+
+	// Call usecase
+	result, err := usecase.List(context.Background(), familyID)
+
+	// Verify error
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, repositoryErr, err)
+
+	mockRepo.AssertExpectations(t)
 }
