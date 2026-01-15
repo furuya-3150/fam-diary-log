@@ -5,7 +5,7 @@ import (
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/db"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/pagination"
+	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 )
 
 type DiaryRepository interface {
@@ -13,7 +13,6 @@ type DiaryRepository interface {
 	List(ctx context.Context, criteria *domain.DiarySearchCriteria, pag *pagination.Pagination) ([]*domain.Diary, error)
 }
 
-// diaryRepository implements DiaryRepository using GORM
 type diaryRepository struct {
 	dm *db.DBManager
 }
@@ -36,24 +35,27 @@ func (dr *diaryRepository) Create(ctx context.Context, diary *domain.Diary) (*do
 func (dr *diaryRepository) List(ctx context.Context, criteria *domain.DiarySearchCriteria, pag *pagination.Pagination) ([]*domain.Diary, error) {
 	db := dr.dm.DB(ctx)
 	var diaries []*domain.Diary
+
 	q := db.Where("family_id = ?", criteria.FamilyID)
 
-	if criteria.StartDate != "" {
+	if !criteria.StartDate.IsZero() {
 		q = q.Where("created_at >= ?", criteria.StartDate)
 	}
 
-	if criteria.EndDate != "" {
+	if !criteria.EndDate.IsZero() {
 		q = q.Where("created_at <= ?", criteria.EndDate)
 	}
 
-	if pag.Limit > 0 {
-		q = q.Limit(pag.Limit)
+	if pag != nil {
+		if pag.Limit > 0 {
+			q = q.Limit(pag.Limit)
+		}
+		if pag.Offset > 0 {
+			q = q.Offset(pag.Offset)
+		}
 	}
 
-	if pag.Offset > 0 {
-		q = q.Offset(pag.Offset)
-	}
-
+	// created_at で降順ソート
 	err := q.Order("created_at DESC").Find(&diaries).Error
 	if err != nil {
 		return nil, err

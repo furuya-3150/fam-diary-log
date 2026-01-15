@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 
@@ -45,24 +44,14 @@ func (dh *DiaryHandler) Create(e echo.Context) error {
 	return response.RespondSuccess(e, http.StatusOK, res)
 }
 
-// List handles GET /diaries request
-func (dh *DiaryHandler) List(w http.ResponseWriter, r *http.Request) {
-	// query := usecase.DiaryQuery{
-	// 	FamilyID:  r.URL.Query().Get("family_id"),
-	// 	UserID:    r.URL.Query().Get("user_id"),
-	// 	StartDate: r.URL.Query().Get("start_date"),
-	// 	EndDate:   r.URL.Query().Get("end_date"),
-	// 	Limit:     10,
-	// 	Offset:    0,
-	// }
+func (dh *DiaryHandler) List(e echo.Context) error {
+	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
 
-	// resp, err := dh.controller.List(r.Context(), query)
-	// if err != nil {
-	// 	w.WriteHeader(http.StatusInternalServerError)
-	// 	json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
-	// 	return
-	// }
+	res, err := dh.dc.List(e.Request().Context(), familyID)
+	if err != nil {
+		log.Println("controller list error", err)
+		return errors.RespondWithError(e, err)
+	}
 
-	// w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(nil)
+	return response.RespondSuccess(e, http.StatusOK, res)
 }

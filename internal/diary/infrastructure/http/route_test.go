@@ -152,6 +152,10 @@ func TestE2E_CreateDiary_MultipleDiaries(t *testing.T) {
 
 // health check succee
 func TestE2E_Healthz(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping E2E test")
+	}
+	
 	t.Parallel()
 
 	e := NewRouter()
