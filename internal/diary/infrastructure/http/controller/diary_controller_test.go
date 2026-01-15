@@ -1,4 +1,5 @@
 package controller
+
 import (
 	"context"
 	"testing"
@@ -23,14 +24,13 @@ func (m *MockDiaryUsecase) Create(ctx context.Context, diary *domain.Diary) (*do
 	return args.Get(0).(*domain.Diary), args.Error(1)
 }
 
-func (m *MockDiaryUsecase) List(ctx context.Context, criteria *domain.DiarySearchCriteria) ([]*domain.Diary, error) {
-	args := m.Called(ctx, criteria)
+func (m *MockDiaryUsecase) List(ctx context.Context, familyID uuid.UUID) ([]*domain.Diary, error) {
+	args := m.Called(ctx, familyID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]*domain.Diary), args.Error(1)
 }
-
 
 // diary created successfully
 func TestDiaryController_Create_Success(t *testing.T) {
@@ -89,7 +89,6 @@ func TestDiaryController_Create_Success(t *testing.T) {
 
 	mockUsecase.AssertExpectations(t)
 }
-
 
 // diary creation with validation error
 func TestDiaryController_Create_ValidationError(t *testing.T) {
@@ -312,6 +311,125 @@ func TestDiaryController_Create_MultipleCallsIndependent(t *testing.T) {
 
 	if result2.ID != diary2ID {
 		t.Errorf("expected second ID %v, got %v", diary2ID, result2.ID)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// ------------
+// List Diaries
+// ------------
+
+// list diaries successfully
+func TestDiaryController_List_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+	diaryID1 := uuid.New()
+	diaryID2 := uuid.New()
+	createdAt := time.Now()
+
+	expectedDiaries := []*domain.Diary{
+		{
+			ID:        diaryID1,
+			FamilyID:  familyID,
+			UserID:    userID,
+			Title:     "Test Diary 1",
+			Content:   "Content 1",
+			CreatedAt: createdAt,
+		},
+		{
+			ID:        diaryID2,
+			FamilyID:  familyID,
+			UserID:    userID,
+			Title:     "Test Diary 2",
+			Content:   "Content 2",
+			CreatedAt: createdAt.Add(-24 * time.Hour),
+		},
+	}
+
+	mockUsecase.On("List", mock.Anything, familyID).Return(expectedDiaries, nil)
+
+	// Call controller
+	result, err := controller.List(context.Background(), familyID)
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if len(result) != len(expectedDiaries) {
+		t.Errorf("expected %d diaries, got %d", len(expectedDiaries), len(result))
+	}
+
+	if result[0].ID != diaryID1 {
+		t.Errorf("expected first ID %v, got %v", diaryID1, result[0].ID)
+	}
+
+	if result[1].ID != diaryID2 {
+		t.Errorf("expected second ID %v, got %v", diaryID2, result[1].ID)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// list diaries with validation error
+func TestDiaryController_List_ValidationError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	familyID := uuid.New()
+
+	validationErr := &errors.ValidationError{Message: "invalid date format"}
+	mockUsecase.On("List", mock.Anything, familyID).Return(nil, validationErr)
+
+	// Call controller
+	result, err := controller.List(context.Background(), familyID)
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected validation error")
+	}
+
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// list diaries with internal error
+func TestDiaryController_List_InternalError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	familyID := uuid.New()
+
+	internalErr := &errors.InternalError{Message: "database error"}
+	mockUsecase.On("List", mock.Anything, familyID).Return(nil, internalErr)
+
+	// Call controller
+	result, err := controller.List(context.Background(), familyID)
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected internal error")
+	}
+
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
 	}
 
 	mockUsecase.AssertExpectations(t)

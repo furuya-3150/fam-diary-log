@@ -6,11 +6,12 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/usecase"
+	"github.com/google/uuid"
 )
 
 type DiaryController interface {
 	Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error)
-	List(ctx context.Context, query domain.DiarySearchCriteria) ([]dto.DiaryResponse, error)
+	List(ctx context.Context, familyID uuid.UUID) ([]dto.DiaryResponse, error)
 }
 
 type diaryController struct {
@@ -37,7 +38,22 @@ func (dc *diaryController) Create(ctx context.Context, d *domain.Diary) (*dto.Di
 	return res, err
 }
 
-func (dc *diaryController) List(ctx context.Context, query domain.DiarySearchCriteria) ([]dto.DiaryResponse, error) {
-	// TODO: Implement List
-	return []dto.DiaryResponse{}, nil
+func (dc *diaryController) List(ctx context.Context, familyID uuid.UUID) ([]dto.DiaryResponse, error) {
+	diaries, err := dc.du.List(ctx, familyID)
+	if err != nil {
+		return nil, err
+	}
+
+	responses := make([]dto.DiaryResponse, len(diaries))
+	for i, diary := range diaries {
+		responses[i] = dto.DiaryResponse{
+			ID:        diary.ID,
+			FamilyID:  diary.FamilyID,
+			UserID:    diary.UserID,
+			Title:     diary.Title,
+			Content:   diary.Content,
+			CreatedAt: diary.CreatedAt,
+		}
+	}
+	return responses, nil
 }
