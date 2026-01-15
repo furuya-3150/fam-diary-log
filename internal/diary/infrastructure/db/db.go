@@ -37,7 +37,7 @@ func NewDBManger() *DBManager {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	url := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?connect_timeout=%s&sslmode=%s", config.Cfg.DB.DiaryUser,
+	url := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?connect_timeout=%d&sslmode=%s", config.Cfg.DB.DiaryUser,
 		config.Cfg.DB.DiaryPassword, config.Cfg.DB.Host, config.Cfg.DB.Port,
 		config.Cfg.DB.DiaryDBName,
 		config.Cfg.DB.TimeoutSec, config.Cfg.DB.SSLMode)
