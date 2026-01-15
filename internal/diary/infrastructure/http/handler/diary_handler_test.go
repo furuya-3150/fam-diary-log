@@ -29,8 +29,8 @@ func (m *MockDiaryController) Create(ctx context.Context, d *domain.Diary) (*dto
 	return args.Get(0).(*dto.DiaryResponse), args.Error(1)
 }
 
-func (m *MockDiaryController) List(ctx context.Context, query domain.DiarySearchCriteria) ([]dto.DiaryResponse, error) {
-	args := m.Called(ctx, query)
+func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID) ([]dto.DiaryResponse, error) {
+	args := m.Called(ctx, familyID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -266,4 +266,113 @@ func TestDiaryHandler_Create_BindError(t *testing.T) {
 
 	// Controller should not be called on bind error
 	mockController.AssertNotCalled(t, "Create")
+}
+
+// ------------
+// List Diaries
+// ------------
+
+// list diaries successfully
+func TestDiaryHandler_List_Success(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+	diaryID1 := uuid.New()
+	diaryID2 := uuid.New()
+
+	expectedResponses := []dto.DiaryResponse{
+		{
+			ID:       diaryID1,
+			UserID:   userID,
+			FamilyID: familyID,
+			Title:    "Test Diary 1",
+			Content:  "Content 1",
+		},
+		{
+			ID:       diaryID2,
+			UserID:   userID,
+			FamilyID: familyID,
+			Title:    "Test Diary 2",
+			Content:  "Content 2",
+		},
+	}
+
+	mockController.On("List", mock.MatchedBy(func(ctx context.Context) bool {
+		return ctx.Value(infctx.FamilyIDKey) == familyID
+	}), familyID).Return(expectedResponses, nil)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.List(c)
+	if err != nil {
+		t.Fatalf("List failed: %v", err)
+	}
+
+	// Verify response status code
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Verify response body
+	var response map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	mockController.AssertExpectations(t)
+}
+
+// list diaries with error
+func TestDiaryHandler_List_Error(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+
+	internalErr := &errors.InternalError{Message: "database error"}
+	mockController.On("List", mock.Anything, familyID).Return(nil, internalErr)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.List(c)
+	if err != nil {
+		t.Logf("expected error: %v", err)
+	}
+
+	mockController.AssertExpectations(t)
 }
