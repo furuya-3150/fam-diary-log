@@ -1,0 +1,31 @@
+name: diary-backend
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "cmd/diary-api/**"
+      - "internal/diary/**"
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "1.24"
+
+      - run: go mod download
+      - run: go mod tidy
+      - run: go test ./... -v -short -coverprofile=coverage.out
+      - run: go tool cover -html=coverage.out -o coverage.html
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: coverage.html
+          retention-days: 5
