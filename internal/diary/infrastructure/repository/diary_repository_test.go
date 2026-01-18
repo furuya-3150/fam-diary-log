@@ -1,5 +1,4 @@
 package repository
-
 import (
 	"context"
 	"testing"
@@ -8,7 +7,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/config"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/helper"
 )
 
@@ -19,8 +17,8 @@ func TestDiaryRepository_Create_ContextCancelled(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	repo := NewDiaryRepository(dbManager)
 
@@ -47,15 +45,16 @@ func TestDiaryRepository_Create_WithTimeout(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	repo := NewDiaryRepository(dbManager)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
 	defer cancel()
 
-	time.Sleep(time.Duration(config.Cfg.DB.TimeoutSec+1) * time.Second) // タイムアウトを待つ
+	// .envでtimeoutを5秒で設定している
+	time.Sleep(time.Duration(5+1) * time.Second) // タイムアウトを待つ
 
 	diary := &domain.Diary{
 		ID:       uuid.New(),
@@ -77,8 +76,8 @@ func TestDiaryRepository_Create_Success(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	repo := NewDiaryRepository(dbManager)
 
@@ -116,7 +115,7 @@ func TestDiaryRepository_Create_Success(t *testing.T) {
 	}
 
 	var saved domain.Diary
-	if err := gormDB.First(&saved, "id = ?", diaryID).Error; err != nil {
+	if err := dbManager.GetGorm().First(&saved, "id = ?", diaryID).Error; err != nil {
 		t.Fatalf("failed to retrieve saved diary: %v", err)
 	}
 
@@ -131,8 +130,8 @@ func TestDiaryRepository_Create_MultipleRecords(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	repo := NewDiaryRepository(dbManager)
 
@@ -162,7 +161,7 @@ func TestDiaryRepository_Create_MultipleRecords(t *testing.T) {
 	}
 
 	var count int64
-	if err := gormDB.Model(&domain.Diary{}).Where("family_id = ?", familyID).Count(&count).Error; err != nil {
+	if err := dbManager.GetGorm().Model(&domain.Diary{}).Where("family_id = ?", familyID).Count(&count).Error; err != nil {
 		t.Fatalf("failed to count diaries: %v", err)
 	}
 
@@ -181,8 +180,8 @@ func TestDiaryRepository_List_SuccessWithDateRange(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	familyID, userID := uuid.New(), uuid.New()
 	repo := NewDiaryRepository(dbManager)
@@ -217,7 +216,7 @@ func TestDiaryRepository_List_SuccessWithDateRange(t *testing.T) {
 		if _, err := repo.Create(context.Background(), diary); err != nil {
 			t.Fatalf("Create failed: %v", err)
 		}
-		if err := gormDB.Model(diary).Update("created_at", startDate.Add(tc.offset)).Error; err != nil {
+		if err := dbManager.GetGorm().Model(diary).Update("created_at", startDate.Add(tc.offset)).Error; err != nil {
 			t.Fatalf("failed to update created_at: %v", err)
 		}
 	}
@@ -264,8 +263,8 @@ func TestDiaryRepository_List_DifferentFamily(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	repo := NewDiaryRepository(dbManager)
 
@@ -326,8 +325,8 @@ func TestDiaryRepository_List_EmptyResult(t *testing.T) {
 		t.Skip("skipping integration test")
 	}
 
-	gormDB, dbManager := helper.SetupTestDB(t)
-	defer helper.TeardownTestDB(t, gormDB)
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
 
 	repo := NewDiaryRepository(dbManager)
 
