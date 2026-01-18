@@ -5,6 +5,7 @@ CREATE TABLE
     family_id UUID NOT NULL,
     title VARCHAR(255) NULL,
     content TEXT NULL,
+    writing_time_seconds INTEGER NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL
   );
