@@ -15,6 +15,10 @@ func GetStatusCode(err error) int {
 		return http.StatusUnauthorized
 	case *ForbiddenError:
 		return http.StatusForbidden
+	case *ExternalAPIError:
+		return http.StatusServiceUnavailable
+	case *LogicError:
+		return http.StatusInternalServerError
 	case *InternalError:
 		return http.StatusInternalServerError
 	default:
@@ -35,6 +39,10 @@ func GetErrorCode(err error) string {
 		return "UNAUTHORIZED"
 	case *ForbiddenError:
 		return "FORBIDDEN"
+	case *ExternalAPIError:
+		return "EXTERNAL_API_ERROR"
+	case *LogicError:
+		return "LOGIC_ERROR"
 	case *InternalError:
 		return "INTERNAL_ERROR"
 	default:
