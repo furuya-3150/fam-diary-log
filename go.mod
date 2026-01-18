@@ -7,6 +7,7 @@ toolchain go1.24.11
 require (
 	github.com/google/uuid v1.6.0
 	github.com/labstack/echo/v4 v4.15.0
+	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/stretchr/testify v1.11.1
 	gorm.io/gorm v1.31.1
 )
