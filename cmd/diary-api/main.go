@@ -31,7 +31,7 @@ func init() {
 	if os.Getenv("GO_ENV") == "dev" {
 		err := godotenv.Load("./cmd/diary-api/.env")
 		if err != nil {
-			slog.Error("Error loading .env file", err)
+			slog.Error("Error loading .env file", "Error", err.Error())
 			os.Exit(1)
 		}
 	}

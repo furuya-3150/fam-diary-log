@@ -27,13 +27,13 @@ func NewDBManager(dbUrl string) *DBManager {
 	}
 	db, err := gorm.Open(postgres.Open(dbUrl), &gorm.Config{})
 	if err != nil {
-		slog.Error("failed to connect db", err)
+		slog.Error("failed to connect db", "Error", err.Error())
 		os.Exit(1)
 	}
 
 	// Pingで接続確認
 	if _, err := db.DB(); err != nil {
-		slog.Error("DB ping failed: %v", err)
+		slog.Error("DB ping failed: %v", "Error", err.Error())
 		os.Exit(1)
 	}
 
