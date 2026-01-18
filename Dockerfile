@@ -46,8 +46,9 @@ WORKDIR /app
 COPY . .
 
 RUN go install github.com/air-verse/air@latest && \
-    go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest && \
-    go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
+  go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest && \
+  go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest && \
+  go install gotest.tools/gotestsum@latest
 
 RUN apk add --no-cache make git
 
