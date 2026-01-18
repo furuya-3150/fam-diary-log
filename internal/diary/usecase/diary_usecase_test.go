@@ -10,9 +10,9 @@ import (
 	"github.com/stretchr/testify/mock"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/events"
 	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 )
 
@@ -40,31 +40,40 @@ type MockTransactionManager struct {
 	mock.Mock
 }
 
-func (m *MockTransactionManager) Begin(ctx context.Context) error {
+func (m *MockTransactionManager) BeginTx(ctx context.Context) (context.Context, error) {
 	args := m.Called(ctx)
-	return args.Error(0)
-}
-
-func (m *MockTransactionManager) Commit(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
-func (m *MockTransactionManager) Rollback(ctx context.Context) error {
-	args := m.Called(ctx)
-	return args.Error(0)
-}
-
-func (m *MockTransactionManager) DiaryRepository() repository.DiaryRepository {
-	args := m.Called()
 	if args.Get(0) == nil {
-		return nil
+		return ctx, args.Error(1)
 	}
-	return args.Get(0).(repository.DiaryRepository)
+	return args.Get(0).(context.Context), args.Error(1)
 }
 
-func (m *MockTransactionManager) ExecuteTransaction(ctx context.Context, fn func(context.Context) error) error {
+func (m *MockTransactionManager) CommitTx(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockTransactionManager) RollbackTx(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
+}
+
+func (m *MockTransactionManager) WithTx(ctx context.Context, fn func(context.Context) error) error {
 	args := m.Called(ctx, fn)
+	return args.Error(0)
+}
+
+type MockPublisher struct {
+	mock.Mock
+}
+
+func (m *MockPublisher) Publish(ctx context.Context, event events.Event) error {
+	args := m.Called(ctx, event)
+	return args.Error(0)
+}
+
+func (m *MockPublisher) Close() error {
+	args := m.Called()
 	return args.Error(0)
 }
 
@@ -149,8 +158,9 @@ func TestDiaryUsecaseCreateValidationError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockDiaryRepository)
 			mockTm := new(MockTransactionManager)
+			mockPub := new(MockPublisher)
 
-			usecase := NewDiaryUsecase(mockTm, mockRepo)
+			usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
 
 			_, err := usecase.Create(context.Background(), tt.diary)
 
@@ -179,12 +189,13 @@ func TestDiaryUsecaseCreateRepositoryError(t *testing.T) {
 
 	mockRepo := new(MockDiaryRepository)
 	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
 
 	diary := newValidDiary()
 	expectedErr := &pkgerrors.InternalError{Message: "database connection failed"}
 
 	mockRepo.On("Create", mock.Anything, diary).Return(nil, expectedErr)
-	usecase := NewDiaryUsecase(mockTm, mockRepo)
+	usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
 
 	_, err := usecase.Create(context.Background(), diary)
 
@@ -202,6 +213,7 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 	// Arrange
 	mockRepo := new(MockDiaryRepository)
 	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
 
 	diaryID := uuid.New()
 	userID := uuid.New()
@@ -226,7 +238,13 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 	}
 
 	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
-	usecase := NewDiaryUsecase(mockTm, mockRepo)
+	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
+		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
+			return diaryEvent.DiaryID == diaryID && diaryEvent.UserID == userID && diaryEvent.FamilyID == familyID
+		}
+		return false
+	})).Return(nil)
+	usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
 
 	// Act
 	result, err := usecase.Create(context.Background(), input)
@@ -238,6 +256,7 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 	assert.Equal(t, expected.Title, result.Title)
 	assert.Equal(t, expected.Content, result.Content)
 	mockRepo.AssertExpectations(t)
+	mockPub.AssertExpectations(t)
 }
 
 // diary creation with repository error
@@ -245,6 +264,7 @@ func TestDiaryUsecase_Create_RepositoryError(t *testing.T) {
 	// Arrange
 	mockRepo := new(MockDiaryRepository)
 	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
 
 	input := &domain.Diary{
 		ID:       uuid.New(),
@@ -256,7 +276,7 @@ func TestDiaryUsecase_Create_RepositoryError(t *testing.T) {
 
 	mockRepo.On("Create", mock.Anything, input).Return(nil, &pkgerrors.InternalError{Message: "database connection failed"})
 
-	usecase := NewDiaryUsecase(mockTm, mockRepo)
+	usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
 
 	// Act
 	result, err := usecase.Create(context.Background(), input)
@@ -273,6 +293,7 @@ func TestDiaryUsecaseCreateContextCancelled(t *testing.T) {
 	// Arrange
 	mockRepo := new(MockDiaryRepository)
 	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
 
 	input := &domain.Diary{
 		ID:       uuid.New(),
@@ -287,7 +308,7 @@ func TestDiaryUsecaseCreateContextCancelled(t *testing.T) {
 
 	mockRepo.On("Create", ctx, input).Return(nil, context.Canceled)
 
-	usecase := NewDiaryUsecase(mockTm, mockRepo)
+	usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
 
 	// Act
 	result, err := usecase.Create(ctx, input)
@@ -354,11 +375,18 @@ func TestDiaryUsecaseCreateValidateCreateDiaryRequest(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			mockRepo := new(MockDiaryRepository)
 			mockTm := new(MockTransactionManager)
+			mockPub := new(MockPublisher)
 
-			usecase := NewDiaryUsecase(mockTm, mockRepo)
+			usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
 
 			if !tt.wantError {
 				mockRepo.On("Create", mock.Anything, tt.diary).Return(tt.diary, nil)
+				mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
+					if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
+						return diaryEvent.DiaryID == tt.diary.ID
+					}
+					return false
+				})).Return(nil)
 			}
 
 			_, err := usecase.Create(context.Background(), tt.diary)
@@ -369,6 +397,7 @@ func TestDiaryUsecaseCreateValidateCreateDiaryRequest(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				mockRepo.AssertExpectations(t)
+				mockPub.AssertExpectations(t)
 			}
 		})
 	}
@@ -470,4 +499,150 @@ func TestDiaryUsecaseListRepositoryError(t *testing.T) {
 	assert.Equal(t, repositoryErr, err)
 
 	mockRepo.AssertExpectations(t)
+}
+
+// ============================================
+// Event Publishing Tests
+// ============================================
+
+// TestDiaryUsecase_Create_PublishEvent tests that diary created event is published
+func TestDiaryUsecase_Create_PublishEvent(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+
+	diaryID := uuid.New()
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	input := &domain.Diary{
+		ID:       diaryID,
+		UserID:   userID,
+		FamilyID: familyID,
+		Title:    "Test Diary",
+		Content:  "This is a test diary content",
+	}
+
+	expected := &domain.Diary{
+		ID:        diaryID,
+		UserID:    userID,
+		FamilyID:  familyID,
+		Title:     "Test Diary",
+		Content:   "This is a test diary content",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+
+	// Verify that Publish is called with correct event
+	var capturedEvent *domain.DiaryCreatedEvent
+	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
+		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
+			capturedEvent = diaryEvent
+			return diaryEvent.DiaryID == diaryID && diaryEvent.UserID == userID && diaryEvent.FamilyID == familyID && diaryEvent.Content == "This is a test diary content"
+		}
+		return false
+	})).Return(nil)
+
+	usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
+
+	// Act
+	result, err := usecase.Create(context.Background(), input)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.NotNil(t, capturedEvent)
+	assert.Equal(t, diaryID, capturedEvent.DiaryID)
+	assert.Equal(t, userID, capturedEvent.UserID)
+	assert.Equal(t, familyID, capturedEvent.FamilyID)
+	assert.Equal(t, "This is a test diary content", capturedEvent.Content)
+	mockPub.AssertExpectations(t)
+}
+
+// TestDiaryUsecase_Create_PublishEventError tests successful diary creation even if event publishing fails
+func TestDiaryUsecase_Create_PublishEventError(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+
+	diaryID := uuid.New()
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	input := &domain.Diary{
+		ID:       diaryID,
+		UserID:   userID,
+		FamilyID: familyID,
+		Title:    "Test Diary",
+		Content:  "This is a test diary content",
+	}
+
+	expected := &domain.Diary{
+		ID:        diaryID,
+		UserID:    userID,
+		FamilyID:  familyID,
+		Title:     "Test Diary",
+		Content:   "This is a test diary content",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+
+	// Simulate publisher error
+	publishErr := &pkgerrors.InternalError{Message: "failed to publish event"}
+	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
+		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
+			return diaryEvent.DiaryID == diaryID
+		}
+		return false
+	})).Return(publishErr)
+
+	usecase := NewDiaryUsecaseWithPublisher(mockTm, mockRepo, mockPub)
+
+	// Act
+	result, err := usecase.Create(context.Background(), input)
+
+	// Assert
+	// Should still succeed even if publishing fails (error is only logged)
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, expected.ID, result.ID)
+	mockRepo.AssertExpectations(t)
+	mockPub.AssertExpectations(t)
+}
+
+// TestDiaryUsecase_Create_NilPublisher tests create fails when publisher is not set
+func TestDiaryUsecase_Create_NilPublisher(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+
+	input := &domain.Diary{
+		ID:       uuid.New(),
+		UserID:   uuid.New(),
+		FamilyID: uuid.New(),
+		Title:    "Test Diary",
+		Content:  "This is a test diary content",
+	}
+
+	// Create usecase without publisher
+	usecase := NewDiaryUsecase(mockTm, mockRepo)
+
+	// Act
+	result, err := usecase.Create(context.Background(), input)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	if logicErr, ok := err.(*pkgerrors.LogicError); ok {
+		assert.Equal(t, "publisher is not set", logicErr.Message)
+	} else {
+		t.Errorf("expected LogicError, got %T", err)
+	}
+	mockRepo.AssertNotCalled(t, "Create")
 }

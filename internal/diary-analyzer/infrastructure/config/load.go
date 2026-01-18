@@ -8,3 +8,9 @@ func loadDB() DBConfig {
 		TestDatabaseURL: os.Getenv("TEST_DATABASE_URL"),
 	}
 }
+
+func loadThirdParty() ThirdPartyConfig {
+	return ThirdPartyConfig{
+		YahooNLPAppID: os.Getenv("YAHOO_NLP_APP_ID"),
+	}
+}

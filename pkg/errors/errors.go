@@ -1,5 +1,7 @@
 package errors
 
+import "fmt"
+
 // ValidationError represents a validation error
 type ValidationError struct {
 	Message string
@@ -52,4 +54,29 @@ type InternalError struct {
 
 func (e *InternalError) Error() string {
 	return e.Message
+}
+
+// LogicError represents a logic error in the application
+// This typically indicates an error in the program flow that should never happen
+// in normal operation (e.g., required reference is nil, invalid state transition)
+type LogicError struct {
+	Message string
+}
+
+func (e *LogicError) Error() string {
+	return e.Message
+}
+
+// ExternalAPIError represents an error from external API calls
+type ExternalAPIError struct {
+	Message string
+	Cause   error
+}
+
+// Error implements the error interface
+func (e *ExternalAPIError) Error() string {
+	if e.Cause != nil {
+		return fmt.Sprintf("external api error: %s (%v)", e.Message, e.Cause)
+	}
+	return fmt.Sprintf("external api error: %s", e.Message)
 }

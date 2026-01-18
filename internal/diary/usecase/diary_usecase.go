@@ -2,10 +2,12 @@ package usecase
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/db"
+	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/repository"
+	"github.com/furuya-3150/fam-diary-log/pkg/broker/publisher"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/datetime"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
@@ -18,24 +20,45 @@ type DiaryUsecase interface {
 }
 
 type diaryUsecase struct {
-	tm  db.TransactionManager
-	dr  repository.DiaryRepository
-	clk clock.Clock
+	tm        db.TransactionManager
+	dr        repository.DiaryRepository
+	publisher publisher.Publisher
+	clk       clock.Clock
 }
 
 func NewDiaryUsecase(tm db.TransactionManager, dr repository.DiaryRepository) DiaryUsecase {
 	return &diaryUsecase{
-		tm:  tm,
-		dr:  dr,
-		clk: &clock.Real{},
+		tm:        tm,
+		dr:        dr,
+		publisher: nil,
+		clk:       &clock.Real{},
+	}
+}
+
+func NewDiaryUsecaseWithPublisher(tm db.TransactionManager, dr repository.DiaryRepository, pub publisher.Publisher) DiaryUsecase {
+	return &diaryUsecase{
+		tm:        tm,
+		dr:        dr,
+		publisher: pub,
+		clk:       &clock.Real{},
 	}
 }
 
 func NewDiaryUsecaseWithClock(tm db.TransactionManager, dr repository.DiaryRepository, clk clock.Clock) DiaryUsecase {
 	return &diaryUsecase{
-		tm:  tm,
-		dr:  dr,
-		clk: clk,
+		tm:        tm,
+		dr:        dr,
+		publisher: nil,
+		clk:       clk,
+	}
+}
+
+func NewDiaryUsecaseWithPublisherAndClock(tm db.TransactionManager, dr repository.DiaryRepository, pub publisher.Publisher, clk clock.Clock) DiaryUsecase {
+	return &diaryUsecase{
+		tm:        tm,
+		dr:        dr,
+		publisher: pub,
+		clk:       clk,
 	}
 }
 
@@ -44,10 +67,19 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 	if err != nil {
 		return nil, &errors.ValidationError{Message: err.Error()}
 	}
+	if du.publisher == nil {
+		return nil, &errors.LogicError{Message: "publisher is not set"}
+	}
 
 	diary, err := du.dr.Create(ctx, d)
 	if err != nil {
 		return nil, err
+	}
+
+	// Publish diary created event
+	event := domain.NewDiaryCreatedEvent(diary.ID, diary.UserID, diary.FamilyID, diary.Content)
+	if err := du.publisher.Publish(ctx, event); err != nil {
+		slog.Error("failed to publish diary created event", "error", err.Error())
 	}
 
 	return diary, nil

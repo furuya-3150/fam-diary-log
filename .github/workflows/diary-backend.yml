@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "cmd/diary-api/**"
-      - "internal/diary/**"
   workflow_dispatch:
 
 jobs:
@@ -20,6 +17,8 @@ jobs:
 
       - run: go mod download
       - run: go mod tidy
+
+      # run all tests with coverage
       - run: go test ./... -v -short -coverprofile=coverage.out
       - run: go tool cover -html=coverage.out -o coverage.html
 

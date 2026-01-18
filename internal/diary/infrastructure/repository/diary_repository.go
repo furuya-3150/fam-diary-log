@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/db"
+	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 )
 
