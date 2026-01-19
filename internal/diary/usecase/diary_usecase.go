@@ -5,18 +5,20 @@ import (
 	"log/slog"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/pkg/broker/publisher"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/datetime"
+	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/validation"
 	"github.com/google/uuid"
 )
 
 type DiaryUsecase interface {
 	Create(ctx context.Context, d *domain.Diary) (*domain.Diary, error)
 	List(ctx context.Context, familyID uuid.UUID) ([]*domain.Diary, error)
+	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
 }
 
 type diaryUsecase struct {
@@ -71,6 +73,8 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		return nil, &errors.LogicError{Message: "publisher is not set"}
 	}
 
+	d.ID = uuid.New()
+
 	diary, err := du.dr.Create(ctx, d)
 	if err != nil {
 		return nil, err
@@ -105,4 +109,26 @@ func (du *diaryUsecase) List(ctx context.Context, familyID uuid.UUID) ([]*domain
 	}
 
 	return diaries, nil
+}
+
+func (du *diaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
+	// Validate and parse year and month
+	_, _, err := validation.ValidateYearMonth(year, month)
+	if err != nil {
+		return 0, &errors.ValidationError{Message: err.Error()}
+	}
+
+	// Combine year and month in YYYY-MM format
+	yearMonth := year + "-" + month
+
+	criteria := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: yearMonth,
+	}
+
+	count, err := du.dr.GetCount(ctx, criteria)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

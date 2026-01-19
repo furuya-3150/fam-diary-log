@@ -12,6 +12,7 @@ import (
 type DiaryController interface {
 	Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error)
 	List(ctx context.Context, familyID uuid.UUID) ([]dto.DiaryResponse, error)
+	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
 }
 
 type diaryController struct {
@@ -56,4 +57,12 @@ func (dc *diaryController) List(ctx context.Context, familyID uuid.UUID) ([]dto.
 		}
 	}
 	return responses, nil
+}
+
+func (dc *diaryController) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
+	count, err := dc.du.GetCount(ctx, familyID, year, month)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
 }

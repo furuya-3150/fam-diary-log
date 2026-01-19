@@ -12,3 +12,9 @@ type DiarySearchCriteria struct {
 	StartDate time.Time
 	EndDate   time.Time
 }
+
+// DiaryCountCriteria represents the criteria for counting diaries
+type DiaryCountCriteria struct {
+	FamilyID  uuid.UUID
+	YearMonth string
+}

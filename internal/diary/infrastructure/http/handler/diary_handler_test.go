@@ -37,6 +37,11 @@ func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID) ([]d
 	return args.Get(0).([]dto.DiaryResponse), args.Error(1)
 }
 
+func (m *MockDiaryController) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
+	args := m.Called(ctx, familyID, year, month)
+	return args.Int(0), args.Error(1)
+}
+
 // create diary successfully
 func TestDiaryHandler_Create_Success(t *testing.T) {
 	t.Parallel()
@@ -370,6 +375,79 @@ func TestDiaryHandler_List_Error(t *testing.T) {
 
 	// Call handler
 	err := handler.List(c)
+	if err != nil {
+		t.Logf("expected error: %v", err)
+	}
+
+	mockController.AssertExpectations(t)
+}
+
+// TestDiaryHandler_GetCount_Success tests successful count retrieval
+func TestDiaryHandler_GetCount_Success(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	mockController.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
+
+	// Create HTTP request
+	req := httptest.NewRequest("GET", "/diaries/count/2026/01", nil)
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month")
+	c.SetParamValues("2026", "01")
+
+	// Call handler
+	err := handler.GetCount(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify response
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	mockController.AssertExpectations(t)
+}
+
+// TestDiaryHandler_GetCount_InvalidParams tests invalid parameters
+func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	mockController.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
+
+	// Create HTTP request
+	req := httptest.NewRequest("GET", "/diaries/count/2026/13", nil)
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month")
+	c.SetParamValues("2026", "13")
+
+	// Call handler
+	err := handler.GetCount(c)
 	if err != nil {
 		t.Logf("expected error: %v", err)
 	}

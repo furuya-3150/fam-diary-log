@@ -36,6 +36,11 @@ func (m *MockDiaryRepository) List(ctx context.Context, criteria *domain.DiarySe
 	return args.Get(0).([]*domain.Diary), args.Error(1)
 }
 
+func (m *MockDiaryRepository) GetCount(ctx context.Context, criteria *domain.DiaryCountCriteria) (int, error) {
+	args := m.Called(ctx, criteria)
+	return args.Int(0), args.Error(1)
+}
+
 type MockTransactionManager struct {
 	mock.Mock
 }
@@ -645,4 +650,123 @@ func TestDiaryUsecase_Create_NilPublisher(t *testing.T) {
 		t.Errorf("expected LogicError, got %T", err)
 	}
 	mockRepo.AssertNotCalled(t, "Create")
+}
+
+// ============================================
+// GetCount Tests
+// ============================================
+
+// TestDiaryUsecase_GetCount_Success tests successful count retrieval
+func TestDiaryUsecase_GetCount_Success(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+
+	familyID := uuid.New()
+	criteria := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: "2026-01",
+	}
+
+	mockRepo.On("GetCount", mock.Anything, criteria).Return(5, nil)
+
+	usecase := NewDiaryUsecase(mockTm, mockRepo)
+
+	// Act
+	count, err := usecase.GetCount(context.Background(), familyID, "2026", "01")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, 5, count)
+	mockRepo.AssertExpectations(t)
+}
+
+// TestDiaryUsecase_GetCount_InvalidMonth tests invalid month validation
+func TestDiaryUsecase_GetCount_InvalidMonth(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+
+	familyID := uuid.New()
+	usecase := NewDiaryUsecase(mockTm, mockRepo)
+
+	// Act
+	count, err := usecase.GetCount(context.Background(), familyID, "2026", "13")
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, 0, count)
+	assert.IsType(t, &pkgerrors.ValidationError{}, err)
+	mockRepo.AssertNotCalled(t, "GetCount")
+}
+
+// TestDiaryUsecase_GetCount_InvalidYear tests invalid year validation
+func TestDiaryUsecase_GetCount_InvalidYear(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+
+	familyID := uuid.New()
+	usecase := NewDiaryUsecase(mockTm, mockRepo)
+
+	// Act
+	count, err := usecase.GetCount(context.Background(), familyID, "0", "01")
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, 0, count)
+	assert.IsType(t, &pkgerrors.ValidationError{}, err)
+	mockRepo.AssertNotCalled(t, "GetCount")
+}
+
+// TestDiaryUsecase_GetCount_ZeroCount tests count when no diaries exist
+func TestDiaryUsecase_GetCount_ZeroCount(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+
+	familyID := uuid.New()
+	criteria := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: "2026-02",
+	}
+
+	mockRepo.On("GetCount", mock.Anything, criteria).Return(0, nil)
+
+	usecase := NewDiaryUsecase(mockTm, mockRepo)
+
+	// Act
+	count, err := usecase.GetCount(context.Background(), familyID, "2026", "02")
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Equal(t, 0, count)
+	mockRepo.AssertExpectations(t)
+}
+
+// TestDiaryUsecase_GetCount_RepositoryError tests error handling
+func TestDiaryUsecase_GetCount_RepositoryError(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+
+	familyID := uuid.New()
+	criteria := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: "2026-01",
+	}
+
+	expectedErr := &pkgerrors.InternalError{Message: "database error"}
+	mockRepo.On("GetCount", mock.Anything, criteria).Return(0, expectedErr)
+
+	usecase := NewDiaryUsecase(mockTm, mockRepo)
+
+	// Act
+	count, err := usecase.GetCount(context.Background(), familyID, "2026", "01")
+
+	// Assert
+	assert.Error(t, err)
+	assert.Equal(t, 0, count)
+	assert.Equal(t, expectedErr, err)
+	mockRepo.AssertExpectations(t)
 }

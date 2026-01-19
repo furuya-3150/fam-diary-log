@@ -11,6 +11,7 @@ import (
 type DiaryRepository interface {
 	Create(ctx context.Context, diary *domain.Diary) (*domain.Diary, error)
 	List(ctx context.Context, criteria *domain.DiarySearchCriteria, pag *pagination.Pagination) ([]*domain.Diary, error)
+	GetCount(ctx context.Context, criteria *domain.DiaryCountCriteria) (int, error)
 }
 
 type diaryRepository struct {
@@ -61,4 +62,21 @@ func (dr *diaryRepository) List(ctx context.Context, criteria *domain.DiarySearc
 		return nil, err
 	}
 	return diaries, nil
+}
+
+// GetCount returns the count of diaries based on the given criteria
+func (dr *diaryRepository) GetCount(ctx context.Context, criteria *domain.DiaryCountCriteria) (int, error) {
+	db := dr.dm.DB(ctx)
+	var count int64
+
+	q := db.Model(&domain.Diary{}).Where("family_id = ?", criteria.FamilyID)
+
+	// Filter by YearMonth in YYYY-MM format using to_char
+	q = q.Where("to_char(created_at, 'YYYY-MM') = ?", criteria.YearMonth)
+
+	err := q.Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+	return int(count), nil
 }

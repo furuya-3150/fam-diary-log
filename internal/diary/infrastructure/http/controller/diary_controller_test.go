@@ -32,6 +32,11 @@ func (m *MockDiaryUsecase) List(ctx context.Context, familyID uuid.UUID) ([]*dom
 	return args.Get(0).([]*domain.Diary), args.Error(1)
 }
 
+func (m *MockDiaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
+	args := m.Called(ctx, familyID, year, month)
+	return args.Int(0), args.Error(1)
+}
+
 // diary created successfully
 func TestDiaryController_Create_Success(t *testing.T) {
 	t.Parallel()
@@ -430,6 +435,85 @@ func TestDiaryController_List_InternalError(t *testing.T) {
 
 	if result != nil {
 		t.Errorf("expected nil result on error, got %v", result)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// TestDiaryController_GetCount_Success tests successful count retrieval
+func TestDiaryController_GetCount_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	familyID := uuid.New()
+
+	mockUsecase.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
+
+	// Call controller
+	count, err := controller.GetCount(context.Background(), familyID, "2026", "01")
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if count != 5 {
+		t.Errorf("expected count 5, got %d", count)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// TestDiaryController_GetCount_ZeroCount tests count when no diaries exist
+func TestDiaryController_GetCount_ZeroCount(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	familyID := uuid.New()
+
+	mockUsecase.On("GetCount", mock.Anything, familyID, "2026", "02").Return(0, nil)
+
+	// Call controller
+	count, err := controller.GetCount(context.Background(), familyID, "2026", "02")
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("expected count 0, got %d", count)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// TestDiaryController_GetCount_UsecaseError tests error handling
+func TestDiaryController_GetCount_UsecaseError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	familyID := uuid.New()
+	usecaseErr := &errors.ValidationError{Message: "invalid date format"}
+
+	mockUsecase.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, usecaseErr)
+
+	// Call controller
+	count, err := controller.GetCount(context.Background(), familyID, "2026", "13")
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if count != 0 {
+		t.Errorf("expected count 0, got %d", count)
 	}
 
 	mockUsecase.AssertExpectations(t)

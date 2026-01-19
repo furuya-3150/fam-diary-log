@@ -1,10 +1,13 @@
 package repository
+
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/helper"
@@ -16,6 +19,7 @@ func TestDiaryRepository_Create_ContextCancelled(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test")
 	}
+	godotenv.Load("../../../../cmd/diary-api/.env")
 
 	dbManager := helper.SetupTestDB(t)
 	defer helper.TeardownTestDB(t, dbManager.GetGorm())
@@ -348,5 +352,184 @@ func TestDiaryRepository_List_EmptyResult(t *testing.T) {
 
 	if len(result) != 0 {
 		t.Errorf("expected 0 diaries, got %d", len(result))
+	}
+}
+
+// TestDiaryRepository_GetCount_Success tests successful count retrieval for a specific month
+func TestDiaryRepository_GetCount_Success(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
+
+	repo := NewDiaryRepository(dbManager)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+
+	// Create test diaries for 2026-01
+	for i := 0; i < 3; i++ {
+		diary := &domain.Diary{
+			ID:       uuid.New(),
+			FamilyID: familyID,
+			UserID:   userID,
+			Title:    "Test Diary " + strconv.Itoa(i+1),
+			Content:  "Test content",
+		}
+		_, err := repo.Create(context.Background(), diary)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+	}
+
+	// Count diaries for 2026-01
+	criteria := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: "2026-01",
+	}
+
+	count, err := repo.GetCount(context.Background(), criteria)
+	if err != nil {
+		t.Fatalf("GetCount failed: %v", err)
+	}
+
+	if count != 3 {
+		t.Errorf("expected count 3, got %d", count)
+	}
+}
+
+// TestDiaryRepository_GetCount_EmptyMonth tests count for a month with no diaries
+func TestDiaryRepository_GetCount_EmptyMonth(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
+
+	repo := NewDiaryRepository(dbManager)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+
+	// Create diary for 2025-12 (different month)
+	diary := &domain.Diary{
+		ID:       uuid.New(),
+		FamilyID: familyID,
+		UserID:   userID,
+		Title:    "Previous Month Diary",
+		Content:  "Content for 2025-12",
+	}
+	_, err := repo.Create(context.Background(), diary)
+	if err != nil {
+		t.Fatalf("Create failed: %v", err)
+	}
+	// Set created_at to 2025-12-15
+	if err := dbManager.GetGorm().Model(diary).Update("created_at", time.Date(2025, 12, 15, 0, 0, 0, 0, time.UTC)).Error; err != nil {
+		t.Fatalf("failed to update created_at: %v", err)
+	}
+
+	// Count diaries for 2026-01 (should be 0)
+	criteria := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: "2026-01",
+	}
+
+	count, err := repo.GetCount(context.Background(), criteria)
+	if err != nil {
+		t.Fatalf("GetCount failed: %v", err)
+	}
+
+	if count != 0 {
+		t.Errorf("expected count 0 for 2026-01, got %d", count)
+	}
+
+	// Verify that 2025-12 has 1 diary
+	criteria2025 := &domain.DiaryCountCriteria{
+		FamilyID:  familyID,
+		YearMonth: "2025-12",
+	}
+	count2025, err := repo.GetCount(context.Background(), criteria2025)
+	if err != nil {
+		t.Fatalf("GetCount for 2025-12 failed: %v", err)
+	}
+
+	if count2025 != 1 {
+		t.Errorf("expected count 1 for 2025-12, got %d", count2025)
+	}
+}
+
+// TestDiaryRepository_GetCount_DifferentFamilies tests count isolation between families
+func TestDiaryRepository_GetCount_DifferentFamilies(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping integration test")
+	}
+
+	dbManager := helper.SetupTestDB(t)
+	defer helper.TeardownTestDB(t, dbManager.GetGorm())
+
+	repo := NewDiaryRepository(dbManager)
+
+	familyID1 := uuid.New()
+	familyID2 := uuid.New()
+	userID := uuid.New()
+
+	// Create diaries for family 1
+	for i := 0; i < 2; i++ {
+		diary := &domain.Diary{
+			ID:       uuid.New(),
+			FamilyID: familyID1,
+			UserID:   userID,
+			Title:    "Family1 Diary",
+			Content:  "Content",
+		}
+		_, err := repo.Create(context.Background(), diary)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+	}
+
+	// Create diaries for family 2
+	for i := 0; i < 3; i++ {
+		diary := &domain.Diary{
+			ID:       uuid.New(),
+			FamilyID: familyID2,
+			UserID:   userID,
+			Title:    "Family2 Diary",
+			Content:  "Content",
+		}
+		_, err := repo.Create(context.Background(), diary)
+		if err != nil {
+			t.Fatalf("Create failed: %v", err)
+		}
+	}
+
+	// Count for family 1
+	criteria1 := &domain.DiaryCountCriteria{
+		FamilyID:  familyID1,
+		YearMonth: "2026-01",
+	}
+	count1, err := repo.GetCount(context.Background(), criteria1)
+	if err != nil {
+		t.Fatalf("GetCount failed: %v", err)
+	}
+
+	// Count for family 2
+	criteria2 := &domain.DiaryCountCriteria{
+		FamilyID:  familyID2,
+		YearMonth: "2026-01",
+	}
+	count2, err := repo.GetCount(context.Background(), criteria2)
+	if err != nil {
+		t.Fatalf("GetCount failed: %v", err)
+	}
+
+	if count1 != 2 {
+		t.Errorf("expected count1 to be 2, got %d", count1)
+	}
+	if count2 != 3 {
+		t.Errorf("expected count2 to be 3, got %d", count2)
 	}
 }

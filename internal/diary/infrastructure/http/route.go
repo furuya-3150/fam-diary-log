@@ -37,6 +37,7 @@ func NewRouter() *echo.Echo {
 	diary := e.Group("/diaries")
 	diary.POST("", diaryHandler.Create)
 	diary.GET("", diaryHandler.List)
+	diary.GET("/count/:year/:month", diaryHandler.GetCount)
 
 	return e
 }
