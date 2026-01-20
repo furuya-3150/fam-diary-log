@@ -10,16 +10,6 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 )
 
-const (
-	DB_USER        = "postgres"
-	DB_PASSWORD    = "password"
-	DB_NAME        = "test_diary"
-	DB_HOST        = "db"
-	DB_PORT        = "5432"
-	DB_TIMEOUT_SEC = "5"
-	DB_SSLMODE     = "disable"
-)
-
 // setup
 func SetupTestDB(t *testing.T) (*db.DBManager) {
 	config := config.Load()
