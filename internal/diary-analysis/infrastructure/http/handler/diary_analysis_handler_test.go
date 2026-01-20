@@ -29,6 +29,11 @@ func (m *MockDiaryAnalysisUsecase) GetSentenceCountByDate(ctx context.Context, u
 	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
 
+func (m *MockDiaryAnalysisUsecase) GetAccuracyScoreByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+	args := m.Called(ctx, userID, dateStr)
+	return args.Get(0).(map[string]interface{}), args.Error(1)
+}
+
 // GetWeekCharCount with valid user ID and date - success
 func TestDiaryAnalysisHandler_GetWeekCharCount_Success(t *testing.T) {
 	t.Parallel()
@@ -209,6 +214,62 @@ func TestDiaryAnalysisHandler_GetWeekSentenceCount_Success(t *testing.T) {
 	err := handler.GetWeekSentenceCount(c)
 	if err != nil {
 		t.Fatalf("GetWeekSentenceCount failed: %v", err)
+	}
+
+	// Verify response status code
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Verify response body
+	var response map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	assert.NoError(t, err, "failed to unmarshal response")
+	assert.NotNil(t, response["data"], "expected data in response")
+}
+
+// GetWeekAccuracyScore with valid user ID and date - success
+func TestDiaryAnalysisHandler_GetWeekAccuracyScore_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryAnalysisUsecase)
+	handler := NewDiaryAnalysisHandler(mockUsecase)
+
+	userID := uuid.New()
+	date := "2026-01-20"
+	expectedScore := map[string]interface{}{
+		"2026-01-20": 50,
+		"2026-01-21": 70,
+	}
+
+	mockUsecase.On("GetAccuracyScoreByDate", mock.MatchedBy(func(ctx context.Context) bool {
+		return ctx.Value(infctx.UserIDKey) == userID
+	}), mock.MatchedBy(func(id uuid.UUID) bool {
+		return id == userID
+	}), mock.MatchedBy(func(argDate string) bool {
+		return argDate == date
+	})).Return(expectedScore, nil)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/week-accuracy-score/"+date, nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("date")
+	c.SetParamValues(date)
+
+	// Call handler
+	err := handler.GetWeekAccuracyScore(c)
+	if err != nil {
+		t.Fatalf("GetWeekAccuracyScore failed: %v", err)
 	}
 
 	// Verify response status code

@@ -38,54 +38,54 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_Success(t *testing.T) {
 
 	// Mock repository results
 	mockResults := []*domain.DiaryAnalysis{
-			{
-        ID:        uuid.New(),
-        DiaryID:   uuid.New(),
-        UserID:    userID,
-        FamilyID:  uuid.New(),
-        CharCount: 10,
-        CreatedAt: createdAt.AddDate(0, 0, -1),
-    },
-    {
-        ID:        uuid.New(),
-        DiaryID:   uuid.New(),
-        UserID:    userID,
-        FamilyID:  uuid.New(),
-        CharCount: 20,
-        CreatedAt: createdAt,
-    },
-    {
-        ID:        uuid.New(),
-        DiaryID:   uuid.New(),
-        UserID:    userID,
-        FamilyID:  uuid.New(),
-        CharCount: 30,
-        CreatedAt: time.Now().AddDate(0, 0, 1),
-    },
-    {
-        ID:        uuid.New(),
-        DiaryID:   uuid.New(),
-        UserID:    userID,
-        FamilyID:  uuid.New(),
-        CharCount: 50,
-        CreatedAt: time.Now().AddDate(0, 0, 3),
-    },
-    {
-        ID:        uuid.New(),
-        DiaryID:   uuid.New(),
-        UserID:    userID,
-        FamilyID:  uuid.New(),
-        CharCount: 60,
-        CreatedAt: time.Now().AddDate(0, 0, 4),
-    },
-    {
-        ID:        uuid.New(),
-        DiaryID:   uuid.New(),
-        UserID:    userID,
-        FamilyID:  uuid.New(),
-        CharCount: 70,
-        CreatedAt: time.Now().AddDate(0, 0, 5),
-    },
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 10,
+			CreatedAt: createdAt.AddDate(0, 0, -1),
+		},
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 20,
+			CreatedAt: createdAt,
+		},
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 30,
+			CreatedAt: time.Now().AddDate(0, 0, 1),
+		},
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 50,
+			CreatedAt: time.Now().AddDate(0, 0, 3),
+		},
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 60,
+			CreatedAt: time.Now().AddDate(0, 0, 4),
+		},
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 70,
+			CreatedAt: time.Now().AddDate(0, 0, 5),
+		},
 	}
 
 	mockRepository.On("List", mock.Anything, mock.MatchedBy(func(criteria *domain.DiaryAnalysisSearchCriteria) bool {
@@ -236,4 +236,50 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_DateRange(t *testing.T) {
 
 	// Verify mock was called with correct criteria
 	mockRepository.AssertCalled(t, "List", mock.Anything, mock.Anything)
+}
+
+// GetAccuracyScoreByDate with valid date - success
+func TestDiaryAnalysisUsecase_GetAccuracyScoreByDate_Success(t *testing.T) {
+	t.Parallel()
+
+	mockRepository := new(MockDiaryAnalysisRepository)
+	usecase := NewDiaryAnalysisUsecase(mockRepository)
+
+	userID := uuid.New()
+	dateStr := "2026-01-20"
+
+	createdAt, _ := time.Parse("2006-01-02", dateStr)
+
+	// Mock repository results
+	mockResults := []*domain.DiaryAnalysis{
+		{
+			ID:            uuid.New(),
+			DiaryID:       uuid.New(),
+			UserID:        userID,
+			FamilyID:      uuid.New(),
+			AccuracyScore: 50,
+			CreatedAt:     createdAt,
+		},
+		{
+			ID:            uuid.New(),
+			DiaryID:       uuid.New(),
+			UserID:        userID,
+			FamilyID:      uuid.New(),
+			AccuracyScore: 60,
+			CreatedAt:     createdAt.AddDate(0, 0, 1),
+		},
+	}
+
+	mockRepository.On("List", mock.Anything, mock.Anything).Return(mockResults, nil)
+
+	// Call GetAccuracyScoreByDate
+	result, err := usecase.GetAccuracyScoreByDate(context.Background(), userID, dateStr)
+	if err != nil {
+		t.Fatalf("GetAccuracyScoreByDate failed: %v", err)
+	}
+
+	// Verify results
+	assert.NotNil(t, result, "result should not be nil")
+	assert.Equal(t, 50, result[createdAt.Format("2006-01-02")], "accuracy score should match")
+	assert.Equal(t, 60, result[createdAt.AddDate(0, 0, 1).Format("2006-01-02")], "accuracy score should match")
 }

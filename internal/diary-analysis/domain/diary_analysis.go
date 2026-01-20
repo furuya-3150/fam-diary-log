@@ -13,7 +13,7 @@ type DiaryAnalysis struct {
 	FamilyID      uuid.UUID `gorm:"type:uuid;not null" json:"family_id"`
 	CharCount     int       `gorm:"not null;default:0" json:"char_count"`
 	SentenceCount int       `gorm:"not null;default:0" json:"sentence_count"`
-	AccuracyScore float64   `gorm:"default:0" json:"accuracy_score"`
+	AccuracyScore int       `gorm:"default:0" json:"accuracy_score"`
 	CreatedAt     time.Time `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt     time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 }

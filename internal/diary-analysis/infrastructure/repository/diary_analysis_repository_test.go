@@ -65,7 +65,7 @@ func TestDiaryAnalysisRepository_List_Success(t *testing.T) {
 		FamilyID:      familyID,
 		CharCount:     100,
 		SentenceCount: 10,
-		AccuracyScore: 0.95,
+		AccuracyScore: 50,
 		CreatedAt:     baseDate,
 	}
 
@@ -76,7 +76,7 @@ func TestDiaryAnalysisRepository_List_Success(t *testing.T) {
 		FamilyID:      familyID,
 		CharCount:     150,
 		SentenceCount: 15,
-		AccuracyScore: 0.92,
+		AccuracyScore: 60,
 		CreatedAt:     baseDate.AddDate(0, 0, 1),
 	}
 

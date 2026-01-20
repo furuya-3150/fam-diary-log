@@ -55,3 +55,10 @@ func (dah *DiaryAnalysisHandler) GetWeekSentenceCount(c echo.Context) error {
 		return dah.dau.GetSentenceCountByDate(ctx.Request().Context(), userID, date)
 	})
 }
+
+// GetWeekAccuracyScore handles GET /week-accuracy-score/:date
+func (dah *DiaryAnalysisHandler) GetWeekAccuracyScore(c echo.Context) error {
+	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
+		return dah.dau.GetAccuracyScoreByDate(ctx.Request().Context(), userID, date)
+	})
+}

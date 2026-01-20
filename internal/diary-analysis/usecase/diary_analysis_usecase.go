@@ -15,6 +15,7 @@ import (
 type DiaryAnalysisUsecase interface {
 	GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
 	GetSentenceCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
+	GetAccuracyScoreByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
 }
 
 type diaryAnalysisUsecase struct {
@@ -28,8 +29,8 @@ func NewDiaryAnalysisUsecase(dar repository.DiaryAnalysisRepository) DiaryAnalys
 	}
 }
 
-// getCountByDate is a common method for retrieving count data for each day of the week
-func (dau *diaryAnalysisUsecase) getCountByDate(ctx context.Context, userID uuid.UUID, dateStr string, columnName string, getValue func(*domain.DiaryAnalysis) int) (map[string]interface{}, error) {
+// getValueByDateCommon is a helper method for retrieving values for each day of the week
+func (dau *diaryAnalysisUsecase) getValueByDateCommon(ctx context.Context, userID uuid.UUID, dateStr string, columnName string, getValue func(*domain.DiaryAnalysis) int) (map[string]interface{}, error) {
 	// Validate and parse date
 	date, err := domain.ValidateYYYYMMDDFormat(dateStr)
 	if err != nil {
@@ -69,15 +70,22 @@ func (dau *diaryAnalysisUsecase) getCountByDate(ctx context.Context, userID uuid
 
 // GetCharCountByDate retrieves character count for each day of the week containing the specified date
 func (dau *diaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
-	return dau.getCountByDate(ctx, userID, dateStr, "char_count", func(a *domain.DiaryAnalysis) int {
+	return dau.getValueByDateCommon(ctx, userID, dateStr, "char_count", func(a *domain.DiaryAnalysis) int {
 		return a.CharCount
 	})
 }
 
 // GetSentenceCountByDate retrieves sentence count for each day of the week containing the specified date
 func (dau *diaryAnalysisUsecase) GetSentenceCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
-	return dau.getCountByDate(ctx, userID, dateStr, "sentence_count", func(a *domain.DiaryAnalysis) int {
+	return dau.getValueByDateCommon(ctx, userID, dateStr, "sentence_count", func(a *domain.DiaryAnalysis) int {
 		return a.SentenceCount
+	})
+}
+
+// GetAccuracyScoreByDate retrieves accuracy score for each day of the week containing the specified date
+func (dau *diaryAnalysisUsecase) GetAccuracyScoreByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+	return dau.getValueByDateCommon(ctx, userID, dateStr, "accuracy_score", func(a *domain.DiaryAnalysis) int {
+		return a.AccuracyScore
 	})
 }
 
