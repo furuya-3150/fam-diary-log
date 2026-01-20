@@ -16,6 +16,7 @@ type DiaryAnalysisUsecase interface {
 	GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
 	GetSentenceCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
 	GetAccuracyScoreByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
+	GetWritingTimeByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
 }
 
 type diaryAnalysisUsecase struct {
@@ -86,6 +87,13 @@ func (dau *diaryAnalysisUsecase) GetSentenceCountByDate(ctx context.Context, use
 func (dau *diaryAnalysisUsecase) GetAccuracyScoreByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
 	return dau.getValueByDateCommon(ctx, userID, dateStr, "accuracy_score", func(a *domain.DiaryAnalysis) int {
 		return a.AccuracyScore
+	})
+}
+
+// GetWritingTimeByDate retrieves writing time for each day of the week containing the specified date
+func (dau *diaryAnalysisUsecase) GetWritingTimeByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+	return dau.getValueByDateCommon(ctx, userID, dateStr, "write_time_seconds", func(a *domain.DiaryAnalysis) int {
+		return a.WritingTimeSeconds
 	})
 }
 

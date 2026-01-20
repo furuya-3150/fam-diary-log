@@ -220,19 +220,45 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_DateRange(t *testing.T) {
 	userID := uuid.New()
 	dateStr := "2026-01-20" // Monday
 
+	createdAt, _ := time.Parse("2006-01-02", dateStr)
+
+	// Mock repository results
+	mockResults := []*domain.DiaryAnalysis{
+		{
+			ID:        uuid.New(),
+			DiaryID:   uuid.New(),
+			UserID:    userID,
+			FamilyID:  uuid.New(),
+			CharCount: 100,
+			CreatedAt: createdAt,
+		},
+	}
+
 	mockRepository.On("List", mock.Anything, mock.MatchedBy(func(criteria *domain.DiaryAnalysisSearchCriteria) bool {
 		// Verify the week range is correct (Monday to Sunday)
 		// For 2026-01-20 (Monday), should query from 2026-01-19 to 2026-01-25
 		return criteria.UserID == userID &&
 			!criteria.WeekStart.IsZero() &&
 			!criteria.WeekEnd.IsZero()
-	})).Return([]*domain.DiaryAnalysis{}, nil)
+	})).Return(mockResults, nil)
 
 	// Call GetCharCountByDate
-	_, err := usecase.GetCharCountByDate(context.Background(), userID, dateStr)
+	actual, err := usecase.GetCharCountByDate(context.Background(), userID, dateStr)
 	if err != nil {
 		t.Fatalf("GetCharCountByDate failed: %v", err)
 	}
+
+	// Verify result includes all 7 days of the week with proper values
+	expected := map[string]interface{}{
+		"2026-01-19": nil,
+		"2026-01-20": 100,
+		"2026-01-21": nil,
+		"2026-01-22": nil,
+		"2026-01-23": nil,
+		"2026-01-24": nil,
+		"2026-01-25": nil,
+	}
+	assert.Equal(t, expected, actual)
 
 	// Verify mock was called with correct criteria
 	mockRepository.AssertCalled(t, "List", mock.Anything, mock.Anything)
@@ -273,13 +299,73 @@ func TestDiaryAnalysisUsecase_GetAccuracyScoreByDate_Success(t *testing.T) {
 	mockRepository.On("List", mock.Anything, mock.Anything).Return(mockResults, nil)
 
 	// Call GetAccuracyScoreByDate
-	result, err := usecase.GetAccuracyScoreByDate(context.Background(), userID, dateStr)
+	actual, err := usecase.GetAccuracyScoreByDate(context.Background(), userID, dateStr)
 	if err != nil {
 		t.Fatalf("GetAccuracyScoreByDate failed: %v", err)
 	}
 
-	// Verify results
-	assert.NotNil(t, result, "result should not be nil")
-	assert.Equal(t, 50, result[createdAt.Format("2006-01-02")], "accuracy score should match")
-	assert.Equal(t, 60, result[createdAt.AddDate(0, 0, 1).Format("2006-01-02")], "accuracy score should match")
+	// Verify result
+	expected := map[string]interface{}{
+		"2026-01-19": nil,
+		"2026-01-20": 50,
+		"2026-01-21": 60,
+		"2026-01-22": nil,
+		"2026-01-23": nil,
+		"2026-01-24": nil,
+		"2026-01-25": nil,
+	}
+	assert.Equal(t, expected, actual)
+}
+
+// GetWritingTimeByDate with valid date - success
+func TestDiaryAnalysisUsecase_GetWritingTimeByDate_Success(t *testing.T) {
+	t.Parallel()
+
+	mockRepository := new(MockDiaryAnalysisRepository)
+	usecase := NewDiaryAnalysisUsecase(mockRepository)
+
+	userID := uuid.New()
+	dateStr := "2026-01-20"
+
+	createdAt, _ := time.Parse("2006-01-02", dateStr)
+
+	// Mock repository results
+	mockResults := []*domain.DiaryAnalysis{
+		{
+			ID:               uuid.New(),
+			DiaryID:          uuid.New(),
+			UserID:           userID,
+			FamilyID:         uuid.New(),
+			WritingTimeSeconds: 3600,
+			CreatedAt:        createdAt,
+		},
+		{
+			ID:               uuid.New(),
+			DiaryID:          uuid.New(),
+			UserID:           userID,
+			FamilyID:         uuid.New(),
+			WritingTimeSeconds: 5400,
+			CreatedAt:        createdAt.AddDate(0, 0, 1),
+		},
+	}
+
+	mockRepository.On("List", mock.Anything, mock.Anything).Return(mockResults, nil)
+
+	// Call GetWritingTimeByDate
+	actual, err := usecase.GetWritingTimeByDate(context.Background(), userID, dateStr)
+	if err != nil {
+		t.Fatalf("GetWritingTimeByDate failed: %v", err)
+	}
+
+	// Verify result
+	expected := map[string]interface{}{
+		"2026-01-19": nil,
+		"2026-01-20": 3600,
+		"2026-01-21": 5400,
+		"2026-01-22": nil,
+		"2026-01-23": nil,
+		"2026-01-24": nil,
+		"2026-01-25": nil,
+	}
+	assert.Equal(t, expected, actual)
 }

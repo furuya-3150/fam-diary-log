@@ -31,6 +31,7 @@ func NewRouter() *echo.Echo {
 	analyses.GET("/week-char-count/:date", diaryAnalysisHandler.GetWeekCharCount)
 	analyses.GET("/week-sentence-count/:date", diaryAnalysisHandler.GetWeekSentenceCount)
 	analyses.GET("/week-accuracy-score/:date", diaryAnalysisHandler.GetWeekAccuracyScore)
+	analyses.GET("/week-writing-time-seconds/:date", diaryAnalysisHandler.GetWeekWritingTime)
 
 	return e
 }

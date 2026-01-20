@@ -62,3 +62,10 @@ func (dah *DiaryAnalysisHandler) GetWeekAccuracyScore(c echo.Context) error {
 		return dah.dau.GetAccuracyScoreByDate(ctx.Request().Context(), userID, date)
 	})
 }
+
+// GetWeekWritingTime handles GET /week-writing-time/:date
+func (dah *DiaryAnalysisHandler) GetWeekWritingTime(c echo.Context) error {
+	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
+		return dah.dau.GetWritingTimeByDate(ctx.Request().Context(), userID, date)
+	})
+}
