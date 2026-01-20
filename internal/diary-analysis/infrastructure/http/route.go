@@ -29,6 +29,7 @@ func NewRouter() *echo.Echo {
 	// diary analyses
 	analyses := e.Group("/analyses")
 	analyses.GET("/week-char-count/:date", diaryAnalysisHandler.GetWeekCharCount)
+	analyses.GET("/week-sentence-count/:date", diaryAnalysisHandler.GetWeekSentenceCount)
 
 	return e
 }

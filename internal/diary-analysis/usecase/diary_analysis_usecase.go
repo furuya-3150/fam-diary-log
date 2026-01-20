@@ -14,6 +14,7 @@ import (
 // DiaryAnalysisUsecase defines the interface for diary analysis operations
 type DiaryAnalysisUsecase interface {
 	GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
+	GetSentenceCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error)
 }
 
 type diaryAnalysisUsecase struct {
@@ -27,8 +28,8 @@ func NewDiaryAnalysisUsecase(dar repository.DiaryAnalysisRepository) DiaryAnalys
 	}
 }
 
-// GetCharCountByDate retrieves character count for each day of the week containing the specified date
-func (dau *diaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+// getCountByDate is a common method for retrieving count data for each day of the week
+func (dau *diaryAnalysisUsecase) getCountByDate(ctx context.Context, userID uuid.UUID, dateStr string, columnName string, getValue func(*domain.DiaryAnalysis) int) (map[string]interface{}, error) {
 	// Validate and parse date
 	date, err := domain.ValidateYYYYMMDDFormat(dateStr)
 	if err != nil {
@@ -48,7 +49,7 @@ func (dau *diaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID 
 		UserID:    userID,
 		WeekStart: weekStart,
 		WeekEnd:   weekEnd,
-		Columns:   []string{"DATE(created_at) as date", "char_count"},
+		Columns:   []string{"DATE(created_at) as date", columnName},
 	}
 
 	analysis, err := dau.dar.List(ctx, criteria)
@@ -60,10 +61,24 @@ func (dau *diaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID 
 
 	// Fill in actual values from repository results
 	for _, result := range analysis {
-		resultMap[result.CreatedAt.Format("2006-01-02")] = result.CharCount
+		resultMap[result.CreatedAt.Format("2006-01-02")] = getValue(result)
 	}
 
 	return resultMap, nil
+}
+
+// GetCharCountByDate retrieves character count for each day of the week containing the specified date
+func (dau *diaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+	return dau.getCountByDate(ctx, userID, dateStr, "char_count", func(a *domain.DiaryAnalysis) int {
+		return a.CharCount
+	})
+}
+
+// GetSentenceCountByDate retrieves sentence count for each day of the week containing the specified date
+func (dau *diaryAnalysisUsecase) GetSentenceCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+	return dau.getCountByDate(ctx, userID, dateStr, "sentence_count", func(a *domain.DiaryAnalysis) int {
+		return a.SentenceCount
+	})
 }
 
 // Build map with all dates of the week, initializing with nil

@@ -19,12 +19,12 @@ type MockDiaryAnalysisUsecase struct {
 	mock.Mock
 }
 
-func (m *MockDiaryAnalysisUsecase) GetWeekCharCount(ctx context.Context, userID uuid.UUID, dateStr string) (int, error) {
+func (m *MockDiaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
 	args := m.Called(ctx, userID, dateStr)
-	return args.Int(0), args.Error(1)
+	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
 
-func (m *MockDiaryAnalysisUsecase) GetCharCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
+func (m *MockDiaryAnalysisUsecase) GetSentenceCountByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
 	args := m.Called(ctx, userID, dateStr)
 	return args.Get(0).(map[string]interface{}), args.Error(1)
 }
@@ -165,4 +165,60 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_InvalidDate(t *testing.T) {
 
 	// Verify mock was called
 	mockUsecase.AssertCalled(t, "GetCharCountByDate", mock.Anything, userID, invalidDate)
+}
+
+// GetWeekSentenceCount with valid user ID and date - success
+func TestDiaryAnalysisHandler_GetWeekSentenceCount_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryAnalysisUsecase)
+	handler := NewDiaryAnalysisHandler(mockUsecase)
+
+	userID := uuid.New()
+	date := "2026-01-20"
+	expectedCount := map[string]interface{}{
+		"2026-01-20": 10,
+		"2026-01-21": 15,
+	}
+
+	mockUsecase.On("GetSentenceCountByDate", mock.MatchedBy(func(ctx context.Context) bool {
+		return ctx.Value(infctx.UserIDKey) == userID
+	}), mock.MatchedBy(func(id uuid.UUID) bool {
+		return id == userID
+	}), mock.MatchedBy(func(argDate string) bool {
+		return argDate == date
+	})).Return(expectedCount, nil)
+
+	// Create request
+	req := httptest.NewRequest(http.MethodGet, "/week-sentence-count/"+date, nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("date")
+	c.SetParamValues(date)
+
+	// Call handler
+	err := handler.GetWeekSentenceCount(c)
+	if err != nil {
+		t.Fatalf("GetWeekSentenceCount failed: %v", err)
+	}
+
+	// Verify response status code
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Verify response body
+	var response map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &response)
+	assert.NoError(t, err, "failed to unmarshal response")
+	assert.NotNil(t, response["data"], "expected data in response")
 }

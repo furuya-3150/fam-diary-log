@@ -21,8 +21,8 @@ func NewDiaryAnalysisHandler(dau usecase.DiaryAnalysisUsecase) *DiaryAnalysisHan
 	}
 }
 
-// GetWeekCharCount handles GET /week-char-count/:date
-func (dah *DiaryAnalysisHandler) GetWeekCharCount(c echo.Context) error {
+// handleWeekCount is a common handler for week-based counts
+func (dah *DiaryAnalysisHandler) handleWeekCount(c echo.Context, usecaseFunc func(echo.Context, uuid.UUID, string) (map[string]interface{}, error)) error {
 	// Extract user ID from context
 	userID, ok := c.Request().Context().Value(infctx.UserIDKey).(uuid.UUID)
 	if !ok || userID == uuid.Nil {
@@ -32,12 +32,26 @@ func (dah *DiaryAnalysisHandler) GetWeekCharCount(c echo.Context) error {
 	// Extract date from URL param
 	date := c.Param("date")
 
-	// Call usecase to get char count by date
-	charCountByDate, err := dah.dau.GetCharCountByDate(c.Request().Context(), userID, date)
+	// Call usecase function
+	countByDate, err := usecaseFunc(c, userID, date)
 	if err != nil {
 		return errors.RespondWithError(c, err)
 	}
 
-	// Return response with date-based char counts
-	return response.RespondSuccess(c, http.StatusOK, charCountByDate)
+	// Return response
+	return response.RespondSuccess(c, http.StatusOK, countByDate)
+}
+
+// GetWeekCharCount handles GET /week-char-count/:date
+func (dah *DiaryAnalysisHandler) GetWeekCharCount(c echo.Context) error {
+	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
+		return dah.dau.GetCharCountByDate(ctx.Request().Context(), userID, date)
+	})
+}
+
+// GetWeekSentenceCount handles GET /week-sentence-count/:date
+func (dah *DiaryAnalysisHandler) GetWeekSentenceCount(c echo.Context) error {
+	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
+		return dah.dau.GetSentenceCountByDate(ctx.Request().Context(), userID, date)
+	})
 }
