@@ -60,3 +60,22 @@ func OneOf(value string, allowedValues []string, fieldName string) error {
 	}
 	return fmt.Errorf("%s は許可された値のいずれかでなければなりません", fieldName)
 }
+
+// ValidateYearMonth validates year and month strings and returns them as integers
+func ValidateYearMonth(year, month string) (int, int, error) {
+	var y, m int
+	_, err := fmt.Sscanf(year+"-"+month, "%d-%d", &y, &m)
+	if err != nil {
+		return 0, 0, fmt.Errorf("invalid year or month format: expected YYYY-MM")
+	}
+
+	if y < 1 || y > 9999 {
+		return 0, 0, fmt.Errorf("year must be between 1 and 9999")
+	}
+
+	if m < 1 || m > 12 {
+		return 0, 0, fmt.Errorf("month must be between 1 and 12")
+	}
+
+	return y, m, nil
+}
