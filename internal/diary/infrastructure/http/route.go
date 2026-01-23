@@ -10,6 +10,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/handler"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/usecase"
+	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/labstack/echo/v4"
 )
@@ -22,8 +23,10 @@ func NewRouter() *echo.Echo {
 
 	pub := broker.NewDiaryPublisher(slog.Default())
 
+	clock := &clock.Real{}
 	diaryRepo := repository.NewDiaryRepository(dbManager)
-	diaryUsecase := usecase.NewDiaryUsecaseWithPublisher(txManager, diaryRepo, pub)
+	streakRepo := repository.NewStreakRepository(dbManager)
+	diaryUsecase := usecase.NewDiaryUsecase(txManager, diaryRepo, streakRepo, pub, clock)
 	diaryController := controller.NewDiaryController(diaryUsecase)
 	diaryHandler := handler.NewDiaryHandler(diaryController)
 
