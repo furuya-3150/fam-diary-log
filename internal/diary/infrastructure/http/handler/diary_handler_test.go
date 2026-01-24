@@ -14,6 +14,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -35,6 +36,19 @@ func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID) ([]d
 		return nil, args.Error(1)
 	}
 	return args.Get(0).([]dto.DiaryResponse), args.Error(1)
+}
+
+func (m *MockDiaryController) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
+	args := m.Called(ctx, familyID, year, month)
+	return args.Int(0), args.Error(1)
+}
+
+func (m *MockDiaryController) GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*dto.StreakResponse, error) {
+	args := m.Called(ctx, userID, familyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*dto.StreakResponse), args.Error(1)
 }
 
 // create diary successfully
@@ -370,6 +384,177 @@ func TestDiaryHandler_List_Error(t *testing.T) {
 
 	// Call handler
 	err := handler.List(c)
+	if err != nil {
+		t.Logf("expected error: %v", err)
+	}
+
+	mockController.AssertExpectations(t)
+}
+
+// TestDiaryHandler_GetCount_Success tests successful count retrieval
+func TestDiaryHandler_GetCount_Success(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	mockController.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
+
+	// Create HTTP request
+	req := httptest.NewRequest("GET", "/diaries/count/2026/01", nil)
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month")
+	c.SetParamValues("2026", "01")
+
+	// Call handler
+	err := handler.GetCount(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify response
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status 200, got %d", rec.Code)
+	}
+
+	mockController.AssertExpectations(t)
+}
+
+// TestDiaryHandler_GetCount_InvalidParams tests invalid parameters
+func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	mockController.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
+
+	// Create HTTP request
+	req := httptest.NewRequest("GET", "/diaries/count/2026/13", nil)
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("year", "month")
+	c.SetParamValues("2026", "13")
+
+	// Call handler
+	err := handler.GetCount(c)
+	if err != nil {
+		t.Logf("expected error: %v", err)
+	}
+
+	mockController.AssertExpectations(t)
+}
+
+// ============================================
+// GetStreak Tests
+// ============================================
+
+// TestDiaryHandler_GetStreak_Success tests successful streak retrieval
+func TestDiaryHandler_GetStreak_Success(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+
+	expectedResponse := &dto.StreakResponse{
+		UserID:        userID,
+		FamilyID:      familyID,
+		CurrentStreak: 5,
+		LastPostDate:  nil,
+	}
+
+	mockController.On("GetStreak", mock.MatchedBy(func(ctx context.Context) bool {
+		return ctx.Value(infctx.FamilyIDKey) == familyID && ctx.Value(infctx.UserIDKey) == userID
+	}), userID, familyID).Return(expectedResponse, nil)
+
+	// Create HTTP request
+	req := httptest.NewRequest("GET", "/diaries/streak", nil)
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.GetStreak(c)
+	if err != nil {
+		t.Fatalf("GetStreak failed: %v", err)
+	}
+
+	// Verify response status code
+	if rec.Code != http.StatusOK {
+		t.Errorf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	// Verify response body
+	var response struct {
+		Data dto.StreakResponse `json:"data"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	// Verify streak data
+	assert.Equal(t, expectedResponse, &response.Data)
+
+	mockController.AssertExpectations(t)
+}
+
+// TestDiaryHandler_GetStreak_ControllerError tests error from controller
+func TestDiaryHandler_GetStreak_ControllerError(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+	userID := uuid.New()
+
+	controllerErr := &errors.ValidationError{Message: "invalid user ID"}
+	mockController.On("GetStreak", mock.Anything, userID, familyID).Return(nil, controllerErr)
+
+	// Create HTTP request
+	req := httptest.NewRequest("GET", "/diaries/streak", nil)
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.GetStreak(c)
 	if err != nil {
 		t.Logf("expected error: %v", err)
 	}

@@ -12,16 +12,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-const (
-	DB_USER        = "postgres"
-	DB_PASSWORD    = "password"
-	DB_NAME        = "test_diary"
-	DB_HOST        = "db"
-	DB_PORT        = "5432"
-	DB_TIMEOUT_SEC = "5"
-	DB_SSLMODE     = "disable"
-)
-
 // setup
 func SetupTestDB(t *testing.T) (*db.DBManager) {
 	if os.Getenv("GO_ENV") == "dev" {

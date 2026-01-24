@@ -55,3 +55,30 @@ func (dh *DiaryHandler) List(e echo.Context) error {
 
 	return response.RespondSuccess(e, http.StatusOK, res)
 }
+
+func (dh *DiaryHandler) GetCount(e echo.Context) error {
+	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
+	yearStr := e.Param("year")
+	monthStr := e.Param("month")
+
+	count, err := dh.dc.GetCount(e.Request().Context(), familyID, yearStr, monthStr)
+	if err != nil {
+		log.Println("controller get count error", err)
+		return errors.RespondWithError(e, err)
+	}
+
+	return response.RespondSuccess(e, http.StatusOK, map[string]int{"count": count})
+}
+
+func (dh *DiaryHandler) GetStreak(e echo.Context) error {
+	userID := e.Request().Context().Value(context.UserIDKey).(uuid.UUID)
+	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
+
+	res, err := dh.dc.GetStreak(e.Request().Context(), userID, familyID)
+	if err != nil {
+		log.Println("controller get streak error", err)
+		return errors.RespondWithError(e, err)
+	}
+
+	return response.RespondSuccess(e, http.StatusOK, res)
+}

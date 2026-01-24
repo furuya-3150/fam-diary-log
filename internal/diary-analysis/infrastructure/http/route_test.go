@@ -10,7 +10,6 @@ import (
 
 	infctx "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/context"
 	"github.com/google/uuid"
-	"github.com/joho/godotenv"
 )
 
 // TODO: 前テストのctxの値をチェック
@@ -22,7 +21,6 @@ func TestE2E_CreateDiary_Success(t *testing.T) {
 	}
 	t.Parallel()
 
-	godotenv.Load("../../../../cmd/diary-api/.env")
 	e := NewRouter()
 
 	familyID := uuid.New()
@@ -74,7 +72,6 @@ func TestE2E_CreateDiary_ValidationError(t *testing.T) {
 
 	t.Parallel()
 
-	godotenv.Load("../../../../cmd/diary-api/.env")
 	e := NewRouter()
 
 	familyID := uuid.New()
@@ -114,7 +111,6 @@ func TestE2E_CreateDiary_MultipleDiaries(t *testing.T) {
 
 	t.Parallel()
 
-	godotenv.Load("../../../../cmd/diary-api/.env")
 	e := NewRouter()
 
 	familyID := uuid.New()
@@ -162,7 +158,6 @@ func TestE2E_Healthz(t *testing.T) {
 	
 	t.Parallel()
 
-	godotenv.Load("../../../../cmd/diary-api/.env")
 	e := NewRouter()
 
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
