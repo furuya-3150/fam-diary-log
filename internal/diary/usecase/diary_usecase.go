@@ -22,6 +22,7 @@ type DiaryUsecase interface {
 	Create(ctx context.Context, d *domain.Diary) (*domain.Diary, error)
 	List(ctx context.Context, familyID uuid.UUID) ([]*domain.Diary, error)
 	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
+	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*domain.Streak, error)
 }
 
 type diaryUsecase struct {
@@ -69,6 +70,7 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to update streak", "error", err.Error())
 		// Don't return error, continue with diary creation
+		return nil, err
 	}
 
 	log.Println(err, "hoge 2")
@@ -78,6 +80,7 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 	if err := du.publisher.Publish(ctx, event); err != nil {
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to publish diary created event", "error", err.Error())
+		return nil, err
 	}
 	defer du.publisher.Close()
 	log.Println(err, "hoge 4")
@@ -168,4 +171,23 @@ func (du *diaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, year, 
 		return 0, err
 	}
 	return count, nil
+}
+
+func (du *diaryUsecase) GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*domain.Streak, error) {
+	// Validate userID
+	if userID == uuid.Nil {
+		return nil, &errors.ValidationError{Message: "invalid user ID"}
+	}
+
+	// Validate familyID
+	if familyID == uuid.Nil {
+		return nil, &errors.ValidationError{Message: "invalid family ID"}
+	}
+
+	streak, err := du.sr.Get(ctx, userID, familyID)
+	if err != nil {
+		return nil, err
+	}
+
+	return streak, nil
 }

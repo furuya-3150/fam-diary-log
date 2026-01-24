@@ -13,6 +13,7 @@ type DiaryController interface {
 	Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error)
 	List(ctx context.Context, familyID uuid.UUID) ([]dto.DiaryResponse, error)
 	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
+	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*dto.StreakResponse, error)
 }
 
 type diaryController struct {
@@ -65,4 +66,29 @@ func (dc *diaryController) GetCount(ctx context.Context, familyID uuid.UUID, yea
 		return 0, err
 	}
 	return count, nil
+}
+
+func (dc *diaryController) GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*dto.StreakResponse, error) {
+	streak, err := dc.du.GetStreak(ctx, userID, familyID)
+	if err != nil {
+		return nil, err
+	}
+
+	// streak が nil の場合（レコードが存在しない場合）
+	if streak == nil {
+		return &dto.StreakResponse{
+			UserID:        userID,
+			FamilyID:      familyID,
+			CurrentStreak: 0,
+			LastPostDate:  nil,
+		}, nil
+	}
+
+	res := &dto.StreakResponse{
+		UserID:        streak.UserID,
+		FamilyID:      streak.FamilyID,
+		CurrentStreak: streak.CurrentStreak,
+		LastPostDate:  streak.LastPostDate,
+	}
+	return res, nil
 }

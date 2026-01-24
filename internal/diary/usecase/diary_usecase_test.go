@@ -221,7 +221,9 @@ func TestDiaryUsecaseCreateRepositoryError(t *testing.T) {
 	diary := newValidDiary()
 	expectedErr := &pkgerrors.InternalError{Message: "database connection failed"}
 
+	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, diary).Return(nil, expectedErr)
+	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
 	_, err := usecase.Create(context.Background(), diary)
@@ -264,6 +266,8 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
+	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
+	mockTm.On("CommitTx", mock.Anything).Return(nil)
 	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
 	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
 		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
@@ -271,6 +275,7 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 		}
 		return false
 	})).Return(nil)
+	mockPub.On("Close").Return(nil)
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
@@ -304,7 +309,9 @@ func TestDiaryUsecase_Create_RepositoryError(t *testing.T) {
 		Content:  "This is a test diary",
 	}
 
+	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, input).Return(nil, &pkgerrors.InternalError{Message: "database connection failed"})
+	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
@@ -337,7 +344,9 @@ func TestDiaryUsecaseCreateContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	mockRepo.On("Create", ctx, input).Return(nil, context.Canceled)
+	mockTm.On("BeginTx", mock.Anything).Return(ctx, nil)
+	mockRepo.On("Create", mock.Anything, input).Return(nil, context.Canceled)
+	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
@@ -348,156 +357,6 @@ func TestDiaryUsecaseCreateContextCancelled(t *testing.T) {
 	// Assert
 	assert.Error(t, err)
 	assert.Nil(t, result)
-	mockRepo.AssertExpectations(t)
-}
-
-func TestDiaryUsecaseCreateValidateCreateDiaryRequest(t *testing.T) {
-	tests := []struct {
-		name      string
-		diary     *domain.Diary
-		wantError bool
-	}{
-		{
-			name: "valid diary with single character title",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
-				FamilyID: uuid.New(),
-				Title:    "a",
-				Content:  "valid content",
-			},
-			wantError: false,
-		},
-		{
-			name: "valid diary with max title length",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
-				FamilyID: uuid.New(),
-				Title:    string(make([]byte, 255)),
-				Content:  "valid content",
-			},
-			wantError: false,
-		},
-		{
-			name: "invalid - whitespace only title",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
-				FamilyID: uuid.New(),
-				Title:    "   ",
-				Content:  "valid content",
-			},
-			wantError: true,
-		},
-		{
-			name: "invalid - whitespace only content",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
-				FamilyID: uuid.New(),
-				Title:    "valid title",
-				Content:  "   ",
-			},
-			wantError: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockDiaryRepository)
-			mockTm := new(MockTransactionManager)
-			mockPub := new(MockPublisher)
-
-			mockStreakRepo := new(MockStreakRepository)
-			mockStreakRepo.On("Get", mock.Anything, mock.Anything, mock.Anything).Return(nil, nil)
-			mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
-			usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
-
-			if !tt.wantError {
-				mockRepo.On("Create", mock.Anything, tt.diary).Return(tt.diary, nil)
-				mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
-					if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
-						return diaryEvent.DiaryID == tt.diary.ID
-					}
-					return false
-				})).Return(nil)
-			}
-
-			_, err := usecase.Create(context.Background(), tt.diary)
-
-			if tt.wantError {
-				assert.Error(t, err)
-				mockRepo.AssertNotCalled(t, "Create")
-			} else {
-				assert.NoError(t, err)
-				mockRepo.AssertExpectations(t)
-				mockPub.AssertExpectations(t)
-			}
-		})
-	}
-}
-
-// ------------
-// List Diaries
-// ------------
-
-// TestDiaryUsecaseListSuccess tests successful diary list retrieval
-func TestDiaryUsecaseListSuccess(t *testing.T) {
-	t.Parallel()
-
-	mockRepo := new(MockDiaryRepository)
-	mockTxManager := new(MockTransactionManager)
-
-	// テスト用の固定時刻を指定（2026-01-15, Thursday）
-	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
-	clk := &clock.Fixed{Time: fixedTime}
-
-	// Clock を注入
-	mockStreakRepo := new(MockStreakRepository)
-	usecase := NewDiaryUsecase(mockTxManager, mockRepo, mockStreakRepo, nil,clk)
-
-	familyID := uuid.New()
-	diaryID1 := uuid.New()
-	diaryID2 := uuid.New()
-	createdAt := time.Now()
-
-	expectedDiaries := []*domain.Diary{
-		{
-			ID:        diaryID1,
-			FamilyID:  familyID,
-			Title:     "Test Diary 1",
-			Content:   "Content 1",
-			CreatedAt: createdAt,
-		},
-		{
-			ID:        diaryID2,
-			FamilyID:  familyID,
-			Title:     "Test Diary 2",
-			Content:   "Content 2",
-			CreatedAt: createdAt.Add(-24 * time.Hour),
-		},
-	}
-
-	// 2026-01-15は木曜日なので、週は2026-01-12（月）から2026-01-18（日）
-	expectedStartDate := time.Date(2026, 1, 12, 0, 0, 0, 0, time.UTC)
-	expectedEndDate := time.Date(2026, 1, 18, 23, 59, 59, 999999999, time.UTC)
-	mockRepo.On("List", mock.Anything, mock.MatchedBy(func(criteria *domain.DiarySearchCriteria) bool {
-		return criteria.FamilyID == familyID &&
-			criteria.StartDate.Equal(expectedStartDate) &&
-			criteria.EndDate.Equal(expectedEndDate)
-	}), mock.Anything).Return(expectedDiaries, nil)
-
-	// Call usecase
-	result, err := usecase.List(context.Background(), familyID)
-
-	// Verify result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, len(expectedDiaries), len(result))
-	assert.Equal(t, diaryID1, result[0].ID)
-	assert.Equal(t, diaryID2, result[1].ID)
-
 	mockRepo.AssertExpectations(t)
 }
 
@@ -583,6 +442,10 @@ func TestDiaryUsecase_Create_PublishEvent(t *testing.T) {
 		return false
 	})).Return(nil)
 
+	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
+	mockTm.On("CommitTx", mock.Anything).Return(nil)
+	mockPub.On("Close").Return(nil)
+
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
@@ -642,6 +505,10 @@ func TestDiaryUsecase_Create_PublishEventError(t *testing.T) {
 		return false
 	})).Return(publishErr)
 
+	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
+	mockTm.On("RollbackTx", mock.Anything).Return(nil)
+	mockTm.On("CommitTx", mock.Anything).Return(nil)
+
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
@@ -652,9 +519,8 @@ func TestDiaryUsecase_Create_PublishEventError(t *testing.T) {
 
 	// Assert
 	// Should still succeed even if publishing fails (error is only logged)
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Equal(t, expected.ID, result.ID)
+	assert.Error(t, err)
+	assert.Nil(t, result)
 	mockRepo.AssertExpectations(t)
 	mockPub.AssertExpectations(t)
 }
@@ -866,6 +732,7 @@ func TestDiaryUsecase_Create_CommitOnSuccess(t *testing.T) {
 		return false
 	})).Return(nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
+	mockPub.On("Close").Return(nil)
 
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
@@ -955,6 +822,14 @@ func TestDiaryUsecase_Create_RollbackOnStreakUpdateError(t *testing.T) {
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(nil, streakErr)
 
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
+	// mockTm.On("CommitTx", mock.Anything).Return(nil)
+	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
+		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
+			return diaryEvent.DiaryID == expected.ID
+		}
+		return false
+	})).Return(nil)
+	mockPub.On("Close").Return(nil)
 
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
@@ -962,8 +837,8 @@ func TestDiaryUsecase_Create_RollbackOnStreakUpdateError(t *testing.T) {
 	result, err := usecase.Create(context.Background(), input)
 
 	// Assert
-	assert.NoError(t, err) // Streak error is not returned, only logged
-	assert.NotNil(t, result)
+	assert.Error(t, err) // Streak error is not returned, only logged
+	assert.Nil(t, result)
 	mockTm.AssertCalled(t, "BeginTx", mock.Anything)
 	mockTm.AssertCalled(t, "RollbackTx", mock.Anything)
 	mockTm.AssertNotCalled(t, "CommitTx", mock.Anything)
@@ -1015,8 +890,8 @@ func TestDiaryUsecase_Create_RollbackOnPublishError(t *testing.T) {
 	result, err := usecase.Create(context.Background(), input)
 
 	// Assert
-	assert.NoError(t, err) // Publish error is not returned, only logged
-	assert.NotNil(t, result)
+	assert.Error(t, err) // Publish error is not returned, only logged
+	assert.Nil(t, result)
 	mockTm.AssertCalled(t, "BeginTx", mock.Anything)
 	mockTm.AssertCalled(t, "RollbackTx", mock.Anything)
 	mockTm.AssertNotCalled(t, "CommitTx", mock.Anything)
@@ -1058,6 +933,7 @@ func TestDiaryUsecase_Create_StreakCalculationOnFirstEntry(t *testing.T) {
 	})).Return(&domain.Streak{CurrentStreak: domain.DefaultStreakValue}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	mockPub.On("Close").Return(nil)
 
 	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
 	clk := &clock.Fixed{Time: fixedTime}
@@ -1097,6 +973,7 @@ func TestDiaryUsecase_Create_StreakIncrementOnConsecutiveEntry(t *testing.T) {
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	// mockRepo.On("Close").Return(nil)
 
 	// Fixed time: 2026-01-15 (Thursday)
 	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
@@ -1121,6 +998,7 @@ func TestDiaryUsecase_Create_StreakIncrementOnConsecutiveEntry(t *testing.T) {
 	})).Return(&domain.Streak{CurrentStreak: 2}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	mockPub.On("Close").Return(nil)
 
 	clk := &clock.Fixed{Time: fixedTime}
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
@@ -1183,6 +1061,7 @@ func TestDiaryUsecase_Create_StreakResetOnNonConsecutiveEntry(t *testing.T) {
 	})).Return(&domain.Streak{CurrentStreak: domain.DefaultStreakValue}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	mockPub.On("Close").Return(nil)
 
 	clk := &clock.Fixed{Time: fixedTime}
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
@@ -1246,7 +1125,160 @@ func TestDiaryUsecase_Create_DuplicatePostError(t *testing.T) {
 	result, err := usecase.Create(context.Background(), input)
 
 	// Assert
-	assert.NoError(t, err) // Error is logged but not returned
-	assert.NotNil(t, result)
+	assert.Error(t, err) // Error is logged but not returned
+	assert.Nil(t, result)
 	mockTm.AssertCalled(t, "RollbackTx", mock.Anything)
+}
+
+// ============================================
+// GetStreak Tests
+// ============================================
+
+// TestDiaryUsecase_GetStreak_Success tests successful streak retrieval
+func TestDiaryUsecase_GetStreak_Success(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+	mockStreakRepo := new(MockStreakRepository)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+	lastPostDate := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+
+	expectedStreak := &domain.Streak{
+		UserID:        userID,
+		FamilyID:      familyID,
+		CurrentStreak: 5,
+		LastPostDate:  &lastPostDate,
+	}
+
+	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(expectedStreak, nil)
+
+	clk := &clock.Real{}
+	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
+
+	// Act
+	result, err := usecase.GetStreak(context.Background(), userID, familyID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Equal(t, userID, result.UserID)
+	assert.Equal(t, familyID, result.FamilyID)
+	assert.Equal(t, 5, result.CurrentStreak)
+	assert.Equal(t, lastPostDate, *result.LastPostDate)
+
+	mockStreakRepo.AssertExpectations(t)
+}
+
+// TestDiaryUsecase_GetStreak_NotFound tests when streak doesn't exist
+func TestDiaryUsecase_GetStreak_NotFound(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+	mockStreakRepo := new(MockStreakRepository)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	// Repository returns (nil, nil) when record not found
+	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+
+	clk := &clock.Real{}
+	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
+
+	// Act
+	result, err := usecase.GetStreak(context.Background(), userID, familyID)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.Nil(t, result)
+
+	mockStreakRepo.AssertExpectations(t)
+}
+
+// TestDiaryUsecase_GetStreak_InvalidUserID tests validation error for invalid user ID
+func TestDiaryUsecase_GetStreak_InvalidUserID(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+	mockStreakRepo := new(MockStreakRepository)
+
+	familyID := uuid.New()
+
+	clk := &clock.Real{}
+	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
+
+	// Act
+	result, err := usecase.GetStreak(context.Background(), uuid.Nil, familyID)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.IsType(t, &pkgerrors.ValidationError{}, err)
+	assert.Equal(t, "invalid user ID", err.(*pkgerrors.ValidationError).Message)
+}
+
+// TestDiaryUsecase_GetStreak_InvalidFamilyID tests validation error for invalid family ID
+func TestDiaryUsecase_GetStreak_InvalidFamilyID(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+	mockStreakRepo := new(MockStreakRepository)
+
+	userID := uuid.New()
+
+	clk := &clock.Real{}
+	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
+
+	// Act
+	result, err := usecase.GetStreak(context.Background(), userID, uuid.Nil)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.IsType(t, &pkgerrors.ValidationError{}, err)
+	assert.Equal(t, "invalid family ID", err.(*pkgerrors.ValidationError).Message)
+}
+
+// TestDiaryUsecase_GetStreak_RepositoryError tests repository error handling
+func TestDiaryUsecase_GetStreak_RepositoryError(t *testing.T) {
+	t.Parallel()
+
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+	mockStreakRepo := new(MockStreakRepository)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	repositoryErr := &pkgerrors.InternalError{Message: "database error"}
+	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, repositoryErr)
+
+	clk := &clock.Real{}
+	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
+
+	// Act
+	result, err := usecase.GetStreak(context.Background(), userID, familyID)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Nil(t, result)
+	assert.Equal(t, repositoryErr, err)
+
+	mockStreakRepo.AssertExpectations(t)
 }

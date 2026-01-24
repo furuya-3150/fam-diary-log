@@ -37,6 +37,14 @@ func (m *MockDiaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, yea
 	return args.Int(0), args.Error(1)
 }
 
+func (m *MockDiaryUsecase) GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*domain.Streak, error) {
+	args := m.Called(ctx, userID, familyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Streak), args.Error(1)
+}
+
 // diary created successfully
 func TestDiaryController_Create_Success(t *testing.T) {
 	t.Parallel()
@@ -514,6 +522,157 @@ func TestDiaryController_GetCount_UsecaseError(t *testing.T) {
 
 	if count != 0 {
 		t.Errorf("expected count 0, got %d", count)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// ============================================
+// GetStreak Tests
+// ============================================
+
+// TestDiaryController_GetStreak_Success tests successful streak retrieval
+func TestDiaryController_GetStreak_Success(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+	lastPostDate := time.Date(2026, 1, 15, 0, 0, 0, 0, time.UTC)
+
+	expectedStreak := &domain.Streak{
+		UserID:        userID,
+		FamilyID:      familyID,
+		CurrentStreak: 5,
+		LastPostDate:  &lastPostDate,
+	}
+
+	mockUsecase.On("GetStreak", mock.Anything, userID, familyID).Return(expectedStreak, nil)
+
+	// Call controller
+	result, err := controller.GetStreak(context.Background(), userID, familyID)
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result is nil")
+	}
+
+	if result.UserID != userID {
+		t.Errorf("expected UserID %v, got %v", userID, result.UserID)
+	}
+
+	if result.FamilyID != familyID {
+		t.Errorf("expected FamilyID %v, got %v", familyID, result.FamilyID)
+	}
+
+	if result.CurrentStreak != 5 {
+		t.Errorf("expected CurrentStreak 5, got %d", result.CurrentStreak)
+	}
+
+	if result.LastPostDate == nil {
+		t.Fatal("LastPostDate is nil")
+	}
+
+	if !result.LastPostDate.Equal(lastPostDate) {
+		t.Errorf("expected LastPostDate %v, got %v", lastPostDate, result.LastPostDate)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// TestDiaryController_GetStreak_NotFound tests when streak doesn't exist
+func TestDiaryController_GetStreak_NotFound(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	mockUsecase.On("GetStreak", mock.Anything, userID, familyID).Return(nil, nil)
+
+	// Call controller
+	result, err := controller.GetStreak(context.Background(), userID, familyID)
+
+	// Verify result
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("result should not be nil for non-existent streak")
+	}
+
+	// Should return default values
+	if result.CurrentStreak != 0 {
+		t.Errorf("expected CurrentStreak 0, got %d", result.CurrentStreak)
+	}
+
+	if result.LastPostDate != nil {
+		t.Errorf("expected LastPostDate nil, got %v", result.LastPostDate)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// TestDiaryController_GetStreak_ValidationError tests validation error handling
+func TestDiaryController_GetStreak_ValidationError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	validationErr := &errors.ValidationError{Message: "invalid user ID"}
+	mockUsecase.On("GetStreak", mock.Anything, userID, familyID).Return(nil, validationErr)
+
+	// Call controller
+	result, err := controller.GetStreak(context.Background(), userID, familyID)
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
+	}
+
+	mockUsecase.AssertExpectations(t)
+}
+
+// TestDiaryController_GetStreak_InternalError tests internal error handling
+func TestDiaryController_GetStreak_InternalError(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryUsecase)
+	controller := NewDiaryController(mockUsecase)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	internalErr := &errors.InternalError{Message: "database error"}
+	mockUsecase.On("GetStreak", mock.Anything, userID, familyID).Return(nil, internalErr)
+
+	// Call controller
+	result, err := controller.GetStreak(context.Background(), userID, familyID)
+
+	// Verify result
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if result != nil {
+		t.Errorf("expected nil result on error, got %v", result)
 	}
 
 	mockUsecase.AssertExpectations(t)

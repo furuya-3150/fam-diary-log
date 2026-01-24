@@ -42,5 +42,8 @@ func NewRouter() *echo.Echo {
 	diary.GET("", diaryHandler.List)
 	diary.GET("/count/:year/:month", diaryHandler.GetCount)
 
+	// streak
+	diary.GET("/streak", diaryHandler.GetStreak)
+
 	return e
 }
