@@ -60,7 +60,7 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_Success(t *testing.T) {
 			UserID:    userID,
 			FamilyID:  uuid.New(),
 			CharCount: 30,
-			CreatedAt: time.Now().AddDate(0, 0, 1),
+			CreatedAt: createdAt.AddDate(0, 0, 1),
 		},
 		{
 			ID:        uuid.New(),
@@ -68,7 +68,7 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_Success(t *testing.T) {
 			UserID:    userID,
 			FamilyID:  uuid.New(),
 			CharCount: 50,
-			CreatedAt: time.Now().AddDate(0, 0, 3),
+			CreatedAt: createdAt.AddDate(0, 0, 3),
 		},
 		{
 			ID:        uuid.New(),
@@ -76,7 +76,7 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_Success(t *testing.T) {
 			UserID:    userID,
 			FamilyID:  uuid.New(),
 			CharCount: 60,
-			CreatedAt: time.Now().AddDate(0, 0, 4),
+			CreatedAt: createdAt.AddDate(0, 0, 4),
 		},
 		{
 			ID:        uuid.New(),
@@ -84,7 +84,7 @@ func TestDiaryAnalysisUsecase_GetCharCountByDate_Success(t *testing.T) {
 			UserID:    userID,
 			FamilyID:  uuid.New(),
 			CharCount: 70,
-			CreatedAt: time.Now().AddDate(0, 0, 5),
+			CreatedAt: createdAt.AddDate(0, 0, 5),
 		},
 	}
 
