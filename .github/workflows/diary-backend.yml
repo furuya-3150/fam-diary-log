@@ -18,6 +18,9 @@ jobs:
       - run: go mod download
       - run: go mod tidy
 
+      - name: set env
+        run: go env -w GOTOOLCHAIN=go1.25.1+auto
+
       # run all tests with coverage
       - run: go test ./... -v -short -coverprofile=coverage.out
       - run: go tool cover -html=coverage.out -o coverage.html
