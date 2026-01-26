@@ -31,3 +31,88 @@ jobs:
           name: coverage
           path: coverage.html
           retention-days: 5
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "1.25"
+      - run: go build ./...
+
+  mod-tidy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "1.25"
+      - run: go mod tidy
+      - name: Check for changes in go.mod/go.sum
+        run: |
+          git diff --exit-code go.mod go.sum
+
+  vulncheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "1.25"
+      - run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - run: $(go env GOPATH)/bin/govulncheck ./...
+
+  slack-notify:
+    name: Slack Notify
+    needs: [test, build, mod-tidy-check, vulncheck]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Slack Notify
+        uses: slackapi/slack-github-action@v1.26.0
+        with:
+          channel-id: "C09U35W9Z4J"
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "diary-backend workflow 結果",
+                    "emoji": true
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*test:*\n${{ needs.test.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*build:*\n${{ needs.build.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*mod-tidy-check:*\n${{ needs.mod-tidy-check.result }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*vulncheck:*\n${{ needs.vulncheck.result }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|詳細を見る>"
+                  }
+                }
+              ]
+            }
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
