@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// MockAuthRepository は AuthRepository のモック
-type MockAuthRepository struct {
+// MockUserRepository は UserRepository のモック
+type MockUserRepository struct {
 	mock.Mock
 }
 
-func (m *MockAuthRepository) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
+func (m *MockUserRepository) CreateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
 	args := m.Called(ctx, user)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -29,7 +29,7 @@ func (m *MockAuthRepository) CreateUser(ctx context.Context, user *domain.User) 
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
-func (m *MockAuthRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
+func (m *MockUserRepository) GetUserByEmail(ctx context.Context, email string) (*domain.User, error) {
 	args := m.Called(ctx, email)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -37,7 +37,7 @@ func (m *MockAuthRepository) GetUserByEmail(ctx context.Context, email string) (
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
-func (m *MockAuthRepository) GetUserByProviderID(ctx context.Context, provider domain.AuthProvider, providerID string) (*domain.User, error) {
+func (m *MockUserRepository) GetUserByProviderID(ctx context.Context, provider domain.AuthProvider, providerID string) (*domain.User, error) {
 	args := m.Called(ctx, provider, providerID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -45,7 +45,7 @@ func (m *MockAuthRepository) GetUserByProviderID(ctx context.Context, provider d
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
-func (m *MockAuthRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
+func (m *MockUserRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	args := m.Called(ctx, id)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -53,7 +53,7 @@ func (m *MockAuthRepository) GetUserByID(ctx context.Context, id uuid.UUID) (*do
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
-func (m *MockAuthRepository) UpdateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
+func (m *MockUserRepository) UpdateUser(ctx context.Context, user *domain.User) (*domain.User, error) {
 	args := m.Called(ctx, user)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -84,7 +84,7 @@ func (m *MockOAuthProvider) ExchangeCode(ctx context.Context, code string) (*oau
 	return args.Get(0).(*oauth.OAuthUserInfo), args.Error(1)
 }
 
-func setupAuthUsecase(t *testing.T, mockRepo *MockAuthRepository, mockProvider *MockOAuthProvider) *authUsecase {
+func setupAuthUsecase(t *testing.T, mockRepo *MockUserRepository, mockProvider *MockOAuthProvider) *authUsecase {
 	// テスト用のJWT設定
 	testJWTConfig := config.JWTConfig{
 		Secret:    "test-secret-key",
@@ -133,7 +133,7 @@ func TestAuthUsecase_InitiateGoogleLogin(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockRepo := new(MockAuthRepository)
+			mockRepo := new(MockUserRepository)
 			mockProvider := new(MockOAuthProvider)
 			tt.setupMock(mockProvider)
 
@@ -169,7 +169,7 @@ func TestAuthUsecase_InitiateGoogleLogin(t *testing.T) {
 }
 
 func TestAuthUsecase_HandleGoogleCallback_NewUser(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
 	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
 
@@ -226,7 +226,7 @@ func TestAuthUsecase_HandleGoogleCallback_NewUser(t *testing.T) {
 }
 
 func TestAuthUsecase_HandleGoogleCallback_ExistingUser(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
 	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
 
@@ -271,7 +271,7 @@ func TestAuthUsecase_HandleGoogleCallback_ExistingUser(t *testing.T) {
 }
 
 func TestAuthUsecase_HandleGoogleCallback_EmailAlreadyExists(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
 	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
 
@@ -322,7 +322,7 @@ func TestAuthUsecase_HandleGoogleCallback_EmailAlreadyExists(t *testing.T) {
 }
 
 func TestAuthUsecase_HandleGoogleCallback_ExchangeCodeError(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
 	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
 
@@ -348,7 +348,7 @@ func TestAuthUsecase_HandleGoogleCallback_ExchangeCodeError(t *testing.T) {
 }
 
 func TestAuthUsecase_HandleGoogleCallback_CreateUserError(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
 	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
 
@@ -385,7 +385,7 @@ func TestAuthUsecase_HandleGoogleCallback_CreateUserError(t *testing.T) {
 }
 
 func TestAuthUsecase_generateAccessToken(t *testing.T) {
-	mockRepo := new(MockAuthRepository)
+	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
 	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
 

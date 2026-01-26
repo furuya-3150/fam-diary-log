@@ -22,15 +22,15 @@ type AuthUsecase interface {
 }
 
 type authUsecase struct {
-	authRepo       repository.AuthRepository
+	authRepo       repository.UserRepository
 	googleProvider oauth.OAuthProvider
 	jwtConfig      config.JWTConfig
 }
 
-func NewAuthUsecase(authRepo repository.AuthRepository, googleProvider oauth.OAuthProvider) AuthUsecase {
+func NewAuthUsecase(userRepo repository.UserRepository, googleProvider oauth.OAuthProvider) AuthUsecase {
 	cfg := config.Load()
 	return &authUsecase{
-		authRepo:       authRepo,
+		authRepo:       userRepo,
 		googleProvider: googleProvider,
 		jwtConfig:      cfg.JWT,
 	}

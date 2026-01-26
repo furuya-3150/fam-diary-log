@@ -17,10 +17,10 @@ import (
 // IntegrationTestDeps holds dependencies for integration tests
 type IntegrationTestDeps struct {
 	DB   *gorm.DB
-	Repo AuthRepository
+	Repo UserRepository
 }
 
-func TestAuthRepositoryIntegration_CreateUser(t *testing.T) {
+func TestUserRepositoryIntegration_CreateUser(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -61,7 +61,7 @@ func TestAuthRepositoryIntegration_CreateUser(t *testing.T) {
 	assert.Equal(t, "test@example.com", persistedUser.Email)
 }
 
-func TestAuthRepositoryIntegration_CreateUser_DuplicateEmail(t *testing.T) {
+func TestUserRepositoryIntegration_CreateUser_DuplicateEmail(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -104,7 +104,7 @@ func TestAuthRepositoryIntegration_CreateUser_DuplicateEmail(t *testing.T) {
 	assert.Nil(t, result)
 }
 
-func TestAuthRepositoryIntegration_CreateUser_DuplicateProviderID(t *testing.T) {
+func TestUserRepositoryIntegration_CreateUser_DuplicateProviderID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -147,7 +147,7 @@ func TestAuthRepositoryIntegration_CreateUser_DuplicateProviderID(t *testing.T) 
 	assert.Nil(t, result)
 }
 
-func TestAuthRepositoryIntegration_GetUserByProviderID_Found(t *testing.T) {
+func TestUserRepositoryIntegration_GetUserByProviderID_Found(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -185,7 +185,7 @@ func TestAuthRepositoryIntegration_GetUserByProviderID_Found(t *testing.T) {
 	assert.Equal(t, "google-find-me", result.ProviderID)
 }
 
-func TestAuthRepositoryIntegration_GetUserByProviderID_NotFound(t *testing.T) {
+func TestUserRepositoryIntegration_GetUserByProviderID_NotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -203,7 +203,7 @@ func TestAuthRepositoryIntegration_GetUserByProviderID_NotFound(t *testing.T) {
 	assert.Nil(t, result, "user should be nil when not found")
 }
 
-func TestAuthRepositoryIntegration_GetUserByEmail_Found(t *testing.T) {
+func TestUserRepositoryIntegration_GetUserByEmail_Found(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -241,7 +241,7 @@ func TestAuthRepositoryIntegration_GetUserByEmail_Found(t *testing.T) {
 	assert.Equal(t, "google-findbyemail", result.ProviderID)
 }
 
-func TestAuthRepositoryIntegration_GetUserByEmail_NotFound(t *testing.T) {
+func TestUserRepositoryIntegration_GetUserByEmail_NotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -259,7 +259,7 @@ func TestAuthRepositoryIntegration_GetUserByEmail_NotFound(t *testing.T) {
 	assert.Nil(t, result, "user should be nil when not found")
 }
 
-func TestAuthRepositoryIntegration_GetUserByID_Found(t *testing.T) {
+func TestUserRepositoryIntegration_GetUserByID_Found(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -295,7 +295,7 @@ func TestAuthRepositoryIntegration_GetUserByID_Found(t *testing.T) {
 	assert.Equal(t, "Get By ID", result.Name)
 }
 
-func TestAuthRepositoryIntegration_GetUserByID_NotFound(t *testing.T) {
+func TestUserRepositoryIntegration_GetUserByID_NotFound(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -314,7 +314,7 @@ func TestAuthRepositoryIntegration_GetUserByID_NotFound(t *testing.T) {
 	assert.Nil(t, result, "user should be nil when not found")
 }
 
-func TestAuthRepositoryIntegration_UpdateUser(t *testing.T) {
+func TestUserRepositoryIntegration_UpdateUser(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Integration test - requires database setup")
 	}
@@ -362,7 +362,6 @@ func TestAuthRepositoryIntegration_UpdateUser(t *testing.T) {
 	assert.Equal(t, "Updated Name", persistedUser.Name)
 }
 
-
 // setupIntegrationTestDeps sets up test database and dependencies
 func setupIntegrationTestDeps(t *testing.T) *IntegrationTestDeps {
 	t.Helper()
@@ -374,7 +373,7 @@ func setupIntegrationTestDeps(t *testing.T) *IntegrationTestDeps {
 
 	return &IntegrationTestDeps{
 		DB:   dbManager.GetGorm(),
-		Repo: NewAuthRepository(dbManager),
+		Repo: NewUserRepository(dbManager),
 	}
 }
 
