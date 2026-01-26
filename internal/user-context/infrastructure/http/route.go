@@ -19,7 +19,7 @@ func NewRouter() *echo.Echo {
 	cfg := config.Load()
 
 	dbManager := db.NewDBManager(cfg.DB.DatabaseURL)
-	_ = db.NewTransaction(dbManager) // TODO: Use txManager when needed
+	txManager := db.NewTransaction(dbManager) // TODO: Use txManager when needed
 
 	// OAuth providers - Google only
 	googleProvider := oauth.NewGoogleProviderWithOAuth2(
@@ -29,10 +29,15 @@ func NewRouter() *echo.Echo {
 	)
 
 	// Auth
-	authRepo := repository.NewAuthRepository(dbManager)
+	authRepo := repository.NewUserRepository(dbManager)
 	authUsecase := usecase.NewAuthUsecase(authRepo, googleProvider)
 	authController := controller.NewAuthController(authUsecase)
 	authHandler := handler.NewAuthHandler(authController)
+
+	// User
+	userUsecase := usecase.NewUserUsecase(authRepo, txManager)
+	userController := controller.NewUserController(userUsecase)
+	userHandler := handler.NewUserHandler(userController)
 
 	e := echo.New()
 
@@ -55,6 +60,9 @@ func NewRouter() *echo.Echo {
 	auth := e.Group("/auth")
 	auth.GET("/google", authHandler.InitiateGoogleLogin)
 	auth.GET("/google/callback", authHandler.GoogleCallback)
+
+	// User routes
+	e.PUT("/users/me", userHandler.EditProfile)
 
 	return e
 }
