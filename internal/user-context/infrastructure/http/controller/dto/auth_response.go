@@ -17,6 +17,5 @@ type UserResponse struct {
 	Email     string    `json:"email"`
 	Name      string    `json:"name"`
 	Provider  string    `json:"provider"`
-	FamilyID  uuid.UUID `json:"family_id"`
 	CreatedAt time.Time `json:"created_at"`
 }

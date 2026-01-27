@@ -7,7 +7,16 @@ type ValidationError struct {
 	Message string
 }
 
+// BadRequestError represents a bad request error
+type BadRequestError struct {
+	Message string
+}
+
 func (e *ValidationError) Error() string {
+	return e.Message
+}
+
+func (e *BadRequestError) Error() string {
 	return e.Message
 }
 
