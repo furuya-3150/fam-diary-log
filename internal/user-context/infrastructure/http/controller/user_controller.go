@@ -9,6 +9,18 @@ import (
 
 type UserController interface {
 	EditProfile(ctx context.Context, req *dto.EditUserRequest) (*dto.UserResponse, error)
+	GetProfile(ctx context.Context, userID string) (*dto.UserResponse, error)
+}
+
+func (c *userController) GetProfile(ctx context.Context, userID string) (*dto.UserResponse, error) {
+	user, err := c.usecase.GetUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.UserResponse{
+		ID:    user.ID,
+		Email: user.Email,
+	}, nil
 }
 
 type userController struct {

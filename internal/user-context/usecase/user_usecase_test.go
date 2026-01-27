@@ -97,3 +97,53 @@ func TestEditUser_UpdateError(t *testing.T) {
 	require.ErrorAs(t, err, &ierr)
 	repo.AssertExpectations(t)
 }
+
+func TestGetUser_Success(t *testing.T) {
+	id := uuid.New()
+	repo := new(MockUserRepository)
+	tx := new(MockTransactionManager)
+	user := &domain.User{ID: id, Email: "test@example.com"}
+	repo.On("GetUserByID", mock.Anything, id).Return(user, nil)
+	uc := setupUserUsecase(repo, tx)
+	got, err := uc.GetUser(context.Background(), id.String())
+	require.NoError(t, err)
+	require.Equal(t, user.ID, got.ID)
+	require.Equal(t, user.Email, got.Email)
+	repo.AssertExpectations(t)
+}
+
+func TestGetUser_InvalidUUID(t *testing.T) {
+	repo := new(MockUserRepository)
+	tx := new(MockTransactionManager)
+	uc := setupUserUsecase(repo, tx)
+	_, err := uc.GetUser(context.Background(), "invalid-uuid")
+	require.Error(t, err)
+	var verr *pkgerrors.ValidationError
+	require.ErrorAs(t, err, &verr)
+}
+
+func TestGetUser_NotFound(t *testing.T) {
+	id := uuid.New()
+	repo := new(MockUserRepository)
+	tx := new(MockTransactionManager)
+	repo.On("GetUserByID", mock.Anything, id).Return(nil, nil)
+	uc := setupUserUsecase(repo, tx)
+	_, err := uc.GetUser(context.Background(), id.String())
+	require.Error(t, err)
+	var verr *pkgerrors.ValidationError
+	require.ErrorAs(t, err, &verr)
+	repo.AssertExpectations(t)
+}
+
+func TestGetUser_RepoError(t *testing.T) {
+	id := uuid.New()
+	repo := new(MockUserRepository)
+	tx := new(MockTransactionManager)
+	repo.On("GetUserByID", mock.Anything, id).Return(nil, errors.New("db fail"))
+	uc := setupUserUsecase(repo, tx)
+	_, err := uc.GetUser(context.Background(), id.String())
+	require.Error(t, err)
+	var ierr *pkgerrors.InternalError
+	require.ErrorAs(t, err, &ierr)
+	repo.AssertExpectations(t)
+}

@@ -5,6 +5,8 @@ import "net/http"
 // GetStatusCode returns the HTTP status code for the given error
 func GetStatusCode(err error) int {
 	switch err.(type) {
+	case *BadRequestError:
+		return http.StatusBadRequest
 	case *ValidationError:
 		return http.StatusBadRequest
 	case *NotFoundError:
@@ -29,6 +31,8 @@ func GetStatusCode(err error) int {
 // GetErrorCode returns the error code string for the given error
 func GetErrorCode(err error) string {
 	switch err.(type) {
+	case *BadRequestError:
+		return "BAD_REQUEST"
 	case *ValidationError:
 		return "VALIDATION_ERROR"
 	case *NotFoundError:

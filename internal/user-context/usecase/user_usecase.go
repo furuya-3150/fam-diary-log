@@ -19,6 +19,7 @@ type EditUserInput struct {
 
 type UserUsecase interface {
 	EditUser(ctx context.Context, input *EditUserInput) (*domain.User, error)
+	GetUser(ctx context.Context, userID string) (*domain.User, error)
 }
 
 type userUsecase struct {
@@ -31,6 +32,21 @@ func NewUserUsecase(repo repository.UserRepository, tm db.TransactionManager) Us
 		repo: repo,
 		tm:   tm,
 	}
+}
+
+func (u *userUsecase) GetUser(ctx context.Context, userID string) (*domain.User, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, &pkgerrors.ValidationError{Message: "invalid user id"}
+	}
+	user, err := u.repo.GetUserByID(ctx, uid)
+	if err != nil {
+		return nil, &pkgerrors.InternalError{Message: "failed to get user"}
+	}
+	if user == nil {
+		return nil, &pkgerrors.ValidationError{Message: "user not found"}
+	}
+	return user, nil
 }
 
 func (u *userUsecase) EditUser(ctx context.Context, input *EditUserInput) (*domain.User, error) {

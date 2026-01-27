@@ -19,7 +19,7 @@ func NewRouter() *echo.Echo {
 	cfg := config.Load()
 
 	dbManager := db.NewDBManager(cfg.DB.DatabaseURL)
-	txManager := db.NewTransaction(dbManager) // TODO: Use txManager when needed
+	txManager := db.NewTransaction(dbManager)
 
 	// OAuth providers - Google only
 	googleProvider := oauth.NewGoogleProviderWithOAuth2(
@@ -63,6 +63,7 @@ func NewRouter() *echo.Echo {
 
 	// User routes
 	e.PUT("/users/me", userHandler.EditProfile)
+	e.GET("/users/me", userHandler.GetProfile)
 
 	return e
 }
