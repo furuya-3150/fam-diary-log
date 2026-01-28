@@ -3,7 +3,7 @@ name: diary-backend
 on:
   push:
     branches:
-      - main
+      - "**"
   workflow_dispatch:
 
 jobs:
