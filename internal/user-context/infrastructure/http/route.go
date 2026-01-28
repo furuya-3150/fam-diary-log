@@ -39,6 +39,13 @@ func NewRouter() *echo.Echo {
 	userController := controller.NewUserController(userUsecase)
 	userHandler := handler.NewUserHandler(userController)
 
+	// Family
+	familyRepo := repository.NewFamilyRepository(dbManager)
+	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, txManager)
+	familyController := controller.NewFamilyController(familyUsecase)
+	familyHandler := handler.NewFamilyHandler(familyController)
+
 	e := echo.New()
 
 	// Session middleware
@@ -64,6 +71,8 @@ func NewRouter() *echo.Echo {
 	// User routes
 	e.PUT("/users/me", userHandler.EditProfile)
 	e.GET("/users/me", userHandler.GetProfile)
+
+	e.POST("/families", familyHandler.CreateFamily)
 
 	return e
 }
