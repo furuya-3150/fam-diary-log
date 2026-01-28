@@ -19,9 +19,11 @@ func SetupTestDB(t *testing.T) *db.DBManager {
 	fmt.Println(cfg.DB.TestDatabaseURL)
 	dbManager := db.NewDBManager(cfg.DB.TestDatabaseURL)
 
-	// cleanup
-	if err := dbManager.GetGorm().Exec("DELETE FROM users").Error; err != nil {
-		t.Fatalf("failed to clean up test database: %v", err)
+	tables := []string{"users", "families", "family_members"}
+	for _, table := range tables {
+		if err := dbManager.GetGorm().Exec(fmt.Sprintf("DELETE FROM %s", table)).Error; err != nil {
+			t.Logf("warning: failed to cleanup table %s: %v", table, err)
+		}
 	}
 
 	return dbManager
@@ -30,7 +32,10 @@ func SetupTestDB(t *testing.T) *db.DBManager {
 // TeardownTestDB cleans up test database
 func TeardownTestDB(t *testing.T, gormDB *gorm.DB) {
 	t.Helper()
-	if err := gormDB.Exec("DELETE FROM users").Error; err != nil {
-		t.Logf("warning: failed to cleanup test database: %v", err)
+	tables := []string{"users", "families", "family_members"}
+	for _, table := range tables {
+		if err := gormDB.Exec(fmt.Sprintf("DELETE FROM %s", table)).Error; err != nil {
+			t.Logf("warning: failed to cleanup table %s: %v", table, err)
+		}
 	}
 }
