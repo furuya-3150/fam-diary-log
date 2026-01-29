@@ -6,6 +6,7 @@ import (
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
+	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -23,6 +24,11 @@ func (m *MockFamilyUsecase) CreateFamily(ctx context.Context, name string, userI
 	}
 	return args.Get(0).(*domain.Family), args.Error(1)
 }
+
+func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.InviteMembersInput) error {
+	args := m.Called(ctx, in)
+	return args.Error(0)
+}	
 
 func TestFamilyController_CreateFamily_Success(t *testing.T) {
 	mockUsecase := new(MockFamilyUsecase)

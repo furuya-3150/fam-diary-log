@@ -40,3 +40,13 @@ type FamilyMember struct {
 	CreatedAt time.Time `gorm:"not null"`
 	UpdatedAt time.Time `gorm:"not null"`
 }
+
+type FamilyInvitation struct {
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	FamilyID        uuid.UUID  `gorm:"type:uuid;not null;index"`
+	InviterUserID   uuid.UUID  `gorm:"type:uuid;not null"`
+	InvitationToken string     `gorm:"type:varchar(255);not null;uniqueIndex"`
+	ExpiresAt       time.Time  `gorm:"not null"`
+	CreatedAt       time.Time  `gorm:"not null"`
+	UpdatedAt       time.Time  `gorm:"not null"`
+}

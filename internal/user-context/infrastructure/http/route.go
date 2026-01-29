@@ -9,6 +9,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/oauth"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
+	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
@@ -41,8 +42,9 @@ func NewRouter() *echo.Echo {
 
 	// Family
 	familyRepo := repository.NewFamilyRepository(dbManager)
+	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
 	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, txManager)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, txManager, &clock.Real{})
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController)
 
@@ -73,6 +75,7 @@ func NewRouter() *echo.Echo {
 	e.GET("/users/me", userHandler.GetProfile)
 
 	e.POST("/families", familyHandler.CreateFamily)
+	e.POST("/families/invitations", familyHandler.InviteMembers)
 
 	return e
 }
