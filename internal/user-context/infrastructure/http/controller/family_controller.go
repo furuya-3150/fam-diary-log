@@ -10,6 +10,7 @@ import (
 
 type FamilyController interface {
 	CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error)
+	InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error
 }
 
 type familyController struct {
@@ -21,14 +22,28 @@ func NewFamilyController(fu usecase.FamilyUsecase) FamilyController {
 }
 
 func (c *familyController) CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error) {
-       family, err := c.fu.CreateFamily(ctx, req.Name, userID)
-       if err != nil {
-	       return nil, err
-       }
-       return &dto.FamilyResponse{
-	       ID:        family.ID,
-	       Name:      family.Name,
-	       CreatedAt: family.CreatedAt,
-	       UpdatedAt: family.UpdatedAt,
-       }, nil
+	family, err := c.fu.CreateFamily(ctx, req.Name, userID)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.FamilyResponse{
+		ID:        family.ID,
+		Name:      family.Name,
+		CreatedAt: family.CreatedAt,
+		UpdatedAt: family.UpdatedAt,
+	}, nil
+}
+
+func (c *familyController) InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error {
+	in := usecase.InviteMembersInput{
+		FamilyID:      req.FamilyID,
+		InviterUserID: req.UserID,
+		Emails:        req.Emails,
+	}
+	err := c.fu.InviteMembers(ctx, in)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

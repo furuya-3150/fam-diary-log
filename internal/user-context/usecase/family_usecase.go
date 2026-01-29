@@ -2,30 +2,51 @@ package usecase
 
 import (
 	"context"
+	"regexp"
+	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
+	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/random"
 	"github.com/google/uuid"
 )
 
+type InviteMembersInput struct {
+	FamilyID      uuid.UUID
+	InviterUserID uuid.UUID
+	Emails        []string
+}
+
 type FamilyUsecase interface {
 	CreateFamily(ctx context.Context, name string, userID uuid.UUID) (*domain.Family, error)
+	InviteMembers(ctx context.Context, in InviteMembersInput) error
 }
 
 type familyUsecase struct {
 	fr  repository.FamilyRepository
 	fmr repository.FamilyMemberRepository
+	fiR repository.FamilyInvitationRepository
 	tm  db.TransactionManager
+	clk clock.Clock
 }
 
-func NewFamilyUsecase(fr repository.FamilyRepository, fmr repository.FamilyMemberRepository, tm db.TransactionManager) FamilyUsecase {
+func NewFamilyUsecase(fr repository.FamilyRepository, fmr repository.FamilyMemberRepository, fiR repository.FamilyInvitationRepository, tm db.TransactionManager, clk clock.Clock) FamilyUsecase {
 	return &familyUsecase{
 		fr:  fr,
 		fmr: fmr,
+		fiR: fiR,
 		tm:  tm,
+		clk: clk,
 	}
+}
+
+// メール形式バリデーション（簡易）
+func isValidEmail(email string) bool {
+	re := regexp.MustCompile(`^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$`)
+	return re.MatchString(email)
 }
 
 func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (*domain.Family, error) {
@@ -58,4 +79,34 @@ func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uu
 	u.tm.CommitTx(ctx)
 
 	return family, nil
+}
+
+func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersInput) error {
+	targetDate := fu.clk.Now()
+	// 有効期限は7日後
+	expiresAt := targetDate.Add(7 * 24 * time.Hour)
+	token, err := random.GenerateRandomBase64String(32)
+	existing, err := fu.fiR.FindInvitationByFamilyID(ctx, input.FamilyID)
+	if err != nil {
+		return err
+	}
+	if err == nil && existing != nil {
+		err := fu.fiR.UpdateInvitationTokenAndExpires(ctx, input.FamilyID, input.InviterUserID, token, expiresAt)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+	inv := &domain.FamilyInvitation{
+		FamilyID:        input.FamilyID,
+		InviterUserID:   input.InviterUserID,
+		InvitationToken: token,
+		ExpiresAt:       expiresAt,
+	}
+	if err := fu.fiR.CreateInvitation(ctx, inv); err != nil {
+		return err
+	}
+	// TODO: メール送信キューイングへポスト
+
+	return nil
 }
