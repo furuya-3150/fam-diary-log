@@ -44,7 +44,8 @@ func NewRouter() *echo.Echo {
 	familyRepo := repository.NewFamilyRepository(dbManager)
 	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
 	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, txManager, &clock.Real{})
+	familyJoinRequestRepo := repository.NewFamilyJoinRequestRepository(dbManager)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, txManager, &clock.Real{})
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController)
 
