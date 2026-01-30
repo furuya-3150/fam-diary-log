@@ -11,6 +11,7 @@ import (
 type FamilyController interface {
 	CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error)
 	InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error
+	ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) error
 }
 
 type familyController struct {
@@ -46,4 +47,8 @@ func (c *familyController) InviteMembers(ctx context.Context, req *dto.InviteMem
 	}
 
 	return nil
+}
+
+func (c *familyController) ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) error {
+	return c.fu.ApplyToFamily(ctx, req.Token, userID)
 }

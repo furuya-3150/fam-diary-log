@@ -14,6 +14,7 @@ import (
 type FamilyHandler interface {
 	CreateFamily(c echo.Context) error
 	InviteMembers(c echo.Context) error
+	ApplyToFamily(c echo.Context) error
 }
 
 type familyHandler struct {
@@ -77,6 +78,29 @@ func (h *familyHandler) InviteMembers(c echo.Context) error {
 
 	err := h.familyController.InviteMembers(ctx, &req)
 	if err != nil {
+		return errors.RespondWithError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// ApplyToFamily POST /invitations/apply
+func (h *familyHandler) ApplyToFamily(c echo.Context) error {
+	var req dto.ApplyRequest
+	if err := c.Bind(&req); err != nil {
+		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request body: " + err.Error()})
+	}
+	if req.Token == "" {
+		return errors.RespondWithError(c, &errors.BadRequestError{Message: "token is required"})
+	}
+
+	ctx := c.Request().Context()
+	val := ctx.Value("user_id")
+	userID, ok := val.(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
+	}
+
+	if err := h.familyController.ApplyToFamily(ctx, &req, userID); err != nil {
 		return errors.RespondWithError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)

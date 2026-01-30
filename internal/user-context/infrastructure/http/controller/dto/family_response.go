@@ -31,3 +31,7 @@ type InvitationInfo struct {
 type InviteMembersResponse struct {
 	Invitations []InvitationInfo `json:"invitations"`
 }
+
+type ApplyRequest struct {
+	Token string `json:"token"`
+}

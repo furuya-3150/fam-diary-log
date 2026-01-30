@@ -54,6 +54,14 @@ func (m *MockFamilyInvitationRepository) FindInvitationByFamilyID(ctx context.Co
 	return args.Get(0).(*domain.FamilyInvitation), args.Error(1)
 }
 
+func (m *MockFamilyInvitationRepository) FindInvitationByToken(ctx context.Context, token string) (*domain.FamilyInvitation, error) {
+	args := m.Called(ctx, token)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.FamilyInvitation), args.Error(1)
+}
+
 type MockTxManager struct{ mock.Mock }
 
 func (m *MockTxManager) BeginTx(ctx context.Context) (context.Context, error) {
@@ -247,5 +255,105 @@ func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
 	fir.On("UpdateInvitationTokenAndExpires", mock.Anything, familyID, inviterID, mock.AnythingOfType("string"), mock.Anything).Return(errors.New("update error"))
 
 	err := u.InviteMembers(ctx, InviteMembersInput{FamilyID: familyID, InviterUserID: inviterID, Emails: []string{"a@example.com"}})
+	require.Error(t, err)
+}
+
+func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
+	fr := new(MockFamilyRepo)
+	fmr := new(MockFamilyMemberRepo)
+	fir := new(MockFamilyInvitationRepository)
+	tm := new(MockTxManager)
+	u := NewFamilyUsecase(fr, fmr, fir, tm, &clock.Fixed{})
+
+	ctx := context.Background()
+	userID := uuid.New()
+	token := "tok-123"
+	familyID := uuid.New()
+
+	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
+	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
+	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
+
+	err := u.ApplyToFamily(ctx, token, userID)
+	require.NoError(t, err)
+	fir.AssertExpectations(t)
+	fmr.AssertExpectations(t)
+}
+
+func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
+	fr := new(MockFamilyRepo)
+	fmr := new(MockFamilyMemberRepo)
+	fir := new(MockFamilyInvitationRepository)
+	tm := new(MockTxManager)
+	u := NewFamilyUsecase(fr, fmr, fir, tm, &clock.Fixed{})
+
+	ctx := context.Background()
+	userID := uuid.New()
+	token := "tok-404"
+
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(nil, nil)
+
+	err := u.ApplyToFamily(ctx, token, userID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "invitation not found")
+}
+
+func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
+	fr := new(MockFamilyRepo)
+	fmr := new(MockFamilyMemberRepo)
+	fir := new(MockFamilyInvitationRepository)
+	tm := new(MockTxManager)
+	u := NewFamilyUsecase(fr, fmr, fir, tm, &clock.Fixed{})
+
+	ctx := context.Background()
+	userID := uuid.New()
+	token := "tok-err"
+
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(nil, errors.New("db error"))
+
+	err := u.ApplyToFamily(ctx, token, userID)
+	require.Error(t, err)
+}
+
+func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
+	fr := new(MockFamilyRepo)
+	fmr := new(MockFamilyMemberRepo)
+	fir := new(MockFamilyInvitationRepository)
+	tm := new(MockTxManager)
+	u := NewFamilyUsecase(fr, fmr, fir, tm, &clock.Fixed{})
+
+	ctx := context.Background()
+	userID := uuid.New()
+	token := "tok-exist"
+	familyID := uuid.New()
+
+	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
+	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(true, nil)
+
+	err := u.ApplyToFamily(ctx, token, userID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "already a member")
+}
+
+func TestFamilyUsecase_ApplyToFamily_AddMemberError(t *testing.T) {
+	fr := new(MockFamilyRepo)
+	fmr := new(MockFamilyMemberRepo)
+	fir := new(MockFamilyInvitationRepository)
+	tm := new(MockTxManager)
+	u := NewFamilyUsecase(fr, fmr, fir, tm, &clock.Fixed{})
+
+	ctx := context.Background()
+	userID := uuid.New()
+	token := "tok-add-err"
+	familyID := uuid.New()
+
+	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
+	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
+	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add error"))
+
+	err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
 }

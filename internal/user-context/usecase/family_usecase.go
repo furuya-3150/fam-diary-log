@@ -23,6 +23,7 @@ type InviteMembersInput struct {
 type FamilyUsecase interface {
 	CreateFamily(ctx context.Context, name string, userID uuid.UUID) (*domain.Family, error)
 	InviteMembers(ctx context.Context, in InviteMembersInput) error
+	ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error
 }
 
 type familyUsecase struct {
@@ -107,6 +108,43 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 		return err
 	}
 	// TODO: メール送信キューイングへポスト
+	// 招待メール送信
+	return nil
+}
 
+func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error {
+	// トークンから招待を取得
+	inv, err := fu.fiR.FindInvitationByToken(ctx, token)
+	if err != nil {
+		return err
+	}
+	if inv == nil {
+		return &errors.NotFoundError{Message: "invitation not found"}
+	}
+	now := fu.clk.Now()
+	if now.After(inv.ExpiresAt) {
+		return &errors.ValidationError{Message: "invitation expired"}
+	}
+
+	// ユーザーがすでにメンバーか確認
+	already, err := fu.fmr.IsUserAlreadyMember(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if already {
+		return &errors.ValidationError{Message: "you are already a member of a family"}
+	}
+
+	member := &domain.FamilyMember{
+		FamilyID: inv.FamilyID,
+		UserID:   userID,
+		Role:     domain.RoleMember,
+	}
+	if err := fu.fmr.AddFamilyMember(ctx, member); err != nil {
+		return err
+	}
+
+	// TODO: メール送信キューイングへポスト
+	// 招待した人へ参加通知メール送信
 	return nil
 }
