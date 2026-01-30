@@ -30,6 +30,11 @@ func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.Invite
 	return args.Error(0)
 }	
 
+func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error {
+	args := m.Called(ctx, token, userID)
+	return args.Error(0)
+}
+
 func TestFamilyController_CreateFamily_Success(t *testing.T) {
 	mockUsecase := new(MockFamilyUsecase)
 	controller := NewFamilyController(mockUsecase)

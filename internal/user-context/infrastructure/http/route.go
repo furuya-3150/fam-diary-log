@@ -76,6 +76,7 @@ func NewRouter() *echo.Echo {
 
 	e.POST("/families", familyHandler.CreateFamily)
 	e.POST("/families/invitations", familyHandler.InviteMembers)
+	e.POST("/families/", familyHandler.InviteMembers)
 
 	return e
 }

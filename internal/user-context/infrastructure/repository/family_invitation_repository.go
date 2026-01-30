@@ -14,6 +14,7 @@ type FamilyInvitationRepository interface {
 	CreateInvitation(ctx context.Context, invitation *domain.FamilyInvitation) error
 	UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time) error
 	FindInvitationByFamilyID(ctx context.Context, familyID uuid.UUID) (*domain.FamilyInvitation, error)
+	FindInvitationByToken(ctx context.Context, token string) (*domain.FamilyInvitation, error)
 }
 
 type familyInvitationRepository struct {
@@ -50,5 +51,18 @@ func (r *familyInvitationRepository) FindInvitationByFamilyID(ctx context.Contex
 		return nil, err
 	}
 
+	return &inv, nil
+}
+
+func (r *familyInvitationRepository) FindInvitationByToken(ctx context.Context, token string) (*domain.FamilyInvitation, error) {
+	dbConn := r.dm.DB(ctx)
+	var inv domain.FamilyInvitation
+	err := dbConn.Where("invitation_token = ?", token).First(&inv).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
 	return &inv, nil
 }

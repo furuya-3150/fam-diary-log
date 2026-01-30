@@ -163,3 +163,38 @@ func TestFamilyInvitationRepository_UpdateInvitationTokenAndExpires_NoMatch(t *t
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
+
+func TestFamilyInvitationRepository_FindInvitationByToken_Success(t *testing.T) {
+	deps := setupDepsForTest(t)
+	ctx := context.Background()
+
+	familyID := uuid.New()
+	inviterID := uuid.New()
+	token := "find-by-token"
+
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		InviterUserID:   inviterID,
+		InvitationToken: token,
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+	require.NoError(t, deps.Repo.CreateInvitation(ctx, inv))
+
+	got, err := deps.Repo.FindInvitationByToken(ctx, token)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, token, got.InvitationToken)
+}
+
+func TestFamilyInvitationRepository_FindInvitationByToken_NotFound(t *testing.T) {
+	deps := setupDepsForTest(t)
+	ctx := context.Background()
+
+	token := "non-existent-token"
+	got, err := deps.Repo.FindInvitationByToken(ctx, token)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}
