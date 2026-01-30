@@ -30,15 +30,23 @@ type familyUsecase struct {
 	fr  repository.FamilyRepository
 	fmr repository.FamilyMemberRepository
 	fiR repository.FamilyInvitationRepository
+	fjr repository.FamilyJoinRequestRepository
 	tm  db.TransactionManager
 	clk clock.Clock
 }
 
-func NewFamilyUsecase(fr repository.FamilyRepository, fmr repository.FamilyMemberRepository, fiR repository.FamilyInvitationRepository, tm db.TransactionManager, clk clock.Clock) FamilyUsecase {
+func NewFamilyUsecase(
+	fr repository.FamilyRepository,
+	fmr repository.FamilyMemberRepository,
+	fiR repository.FamilyInvitationRepository,
+	fjr repository.FamilyJoinRequestRepository,
+	tm db.TransactionManager,
+	clk clock.Clock) FamilyUsecase {
 	return &familyUsecase{
 		fr:  fr,
 		fmr: fmr,
 		fiR: fiR,
+		fjr: fjr,
 		tm:  tm,
 		clk: clk,
 	}
@@ -135,16 +143,23 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 		return &errors.ValidationError{Message: "you are already a member of a family"}
 	}
 
-	member := &domain.FamilyMember{
+	// すでに同一 family_id, user_id で pending の申請があるか確認
+	if existing, err := fu.fjr.FindPendingRequest(ctx, inv.FamilyID, userID); err != nil {
+		return err
+	} else if existing != nil {
+		return &errors.ValidationError{Message: "join request already pending"}
+	}
+
+	// 申請レコードを作成（status=1: 申請中）
+	jr := &domain.FamilyJoinRequest{
 		FamilyID: inv.FamilyID,
 		UserID:   userID,
-		Role:     domain.RoleMember,
+		Status:   domain.JoinRequestStatusPending,
 	}
-	if err := fu.fmr.AddFamilyMember(ctx, member); err != nil {
+	if err := fu.fjr.CreateJoinRequest(ctx, jr); err != nil {
 		return err
 	}
 
 	// TODO: メール送信キューイングへポスト
-	// 招待した人へ参加通知メール送信
 	return nil
 }
