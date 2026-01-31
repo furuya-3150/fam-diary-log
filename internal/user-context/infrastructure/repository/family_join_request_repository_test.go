@@ -92,3 +92,41 @@ func TestFamilyJoinRequestRepository_UpdateStatusByID_UpdatesFields(t *testing.T
 	assert.Equal(t, int(domain.JoinRequestStatusApproved), int(got.Status))
 	require.NotNil(t, got.RespondedAt)
 }
+
+func TestFamilyJoinRequestRepository_FindApprovedByUser_Success(t *testing.T) {
+	deps := setupDepsForJoinRequestTest(t)
+	ctx := context.Background()
+
+	familyID := uuid.New()
+	userID := uuid.New()
+	responderID := uuid.New()
+
+	jr := &domain.FamilyJoinRequest{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		UserID:          userID,
+		Status:          domain.JoinRequestStatusApproved,
+		RespondedAt:     func() time.Time { tt := time.Now(); return tt }(),
+		RespondedUserID: responderID,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
+	}
+
+	require.NoError(t, deps.Repo.CreateJoinRequest(ctx, jr))
+
+	got, err := deps.Repo.FindApprovedByUser(ctx, userID)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Equal(t, int(domain.JoinRequestStatusApproved), int(got.Status))
+}
+
+func TestFamilyJoinRequestRepository_FindApprovedByUser_NotFound(t *testing.T) {
+	deps := setupDepsForJoinRequestTest(t)
+	ctx := context.Background()
+
+	userID := uuid.New()
+
+	got, err := deps.Repo.FindApprovedByUser(ctx, userID)
+	require.NoError(t, err)
+	assert.Nil(t, got)
+}

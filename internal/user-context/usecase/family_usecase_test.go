@@ -91,6 +91,14 @@ func (m *MockFamilyJoinRequestRepository) UpdateStatusByID(ctx context.Context, 
 	return args.Error(0)
 }
 
+func (m *MockFamilyJoinRequestRepository) FindApprovedByUser(ctx context.Context, userID uuid.UUID) (*domain.FamilyJoinRequest, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.FamilyJoinRequest), args.Error(1)
+}
+
 type MockTxManager struct{ mock.Mock }
 
 func (m *MockTxManager) BeginTx(ctx context.Context) (context.Context, error) {
@@ -192,7 +200,6 @@ func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
 	require.Nil(t, result)
 }
 
-// InviteMembers: 正常系 - 新規作成
 func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 	fr := new(MockFamilyRepo)
 	fmr := new(MockFamilyMemberRepo)
@@ -450,7 +457,6 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 	}
 
 	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.MatchedBy(func(updates map[string]interface{}) bool {
 		s, ok := updates["status"].(int)
 		if !ok || s != int(domain.JoinRequestStatusApproved) {
@@ -464,8 +470,6 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 		}
 		return true
 	})).Return(nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
-	tm.On("CommitTx", mock.Anything).Return(nil)
 
 	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
 	require.NoError(t, err)
@@ -498,7 +502,6 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testi
 	}
 
 	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.MatchedBy(func(updates map[string]interface{}) bool {
 		s, ok := updates["status"].(int)
 		if !ok || s != int(domain.JoinRequestStatusRejected) {
@@ -506,13 +509,11 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testi
 		}
 		return true
 	})).Return(nil)
-	tm.On("CommitTx", mock.Anything).Return(nil)
 
 	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
 	require.NoError(t, err)
 
 	tjr.AssertExpectations(t)
-	tm.AssertExpectations(t)
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_NotFound(t *testing.T) {
@@ -560,30 +561,6 @@ func TestFamilyUsecase_RespondToJoinRequest_BadRequest_WhenNotPending(t *testing
 	require.ErrorAs(t, err, &br)
 }
 
-func TestFamilyUsecase_RespondToJoinRequest_BeginTxError(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
-
-	ctx := context.Background()
-	requestID := uuid.New()
-	responderID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:     requestID,
-		Status: domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, errors.New("begin tx failed"))
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
-	require.Error(t, err)
-}
-
 func TestFamilyUsecase_RespondToJoinRequest_UpdateError_Rollback(t *testing.T) {
 	fr := new(MockFamilyRepo)
 	fmr := new(MockFamilyMemberRepo)
@@ -602,76 +579,9 @@ func TestFamilyUsecase_RespondToJoinRequest_UpdateError_Rollback(t *testing.T) {
 	}
 
 	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(errors.New("update failed"))
-	tm.On("RollbackTx", mock.Anything).Return(nil)
 
 	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
 	require.Error(t, err)
 	tm.AssertExpectations(t)
 }
-
-func TestFamilyUsecase_RespondToJoinRequest_AddMemberError_Rollback(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
-
-	ctx := context.Background()
-	requestID := uuid.New()
-	requestUserID := uuid.New()
-	responderID := uuid.New()
-	familyID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:       requestID,
-		FamilyID: familyID,
-		UserID:   requestUserID,
-		Status:   domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add member failed"))
-	tm.On("RollbackTx", mock.Anything).Return(nil)
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
-	require.Error(t, err)
-	tm.AssertExpectations(t)
-}
-
-func TestFamilyUsecase_RespondToJoinRequest_CommitError(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	now := time.Now()
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now})
-
-	ctx := context.Background()
-	requestID := uuid.New()
-	requestUserID := uuid.New()
-	responderID := uuid.New()
-	familyID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:       requestID,
-		FamilyID: familyID,
-		UserID:   requestUserID,
-		Status:   domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
-	tm.On("CommitTx", mock.Anything).Return(errors.New("commit failed"))
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
-	require.Error(t, err)
-}
-

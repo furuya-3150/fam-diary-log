@@ -6,6 +6,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/config"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/handler"
+	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/oauth"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
@@ -45,7 +46,9 @@ func NewRouter() *echo.Echo {
 	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
 	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
 	familyJoinRequestRepo := repository.NewFamilyJoinRequestRepository(dbManager)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, txManager, &clock.Real{})
+	// token generator (infra) for signing JWTs
+	tokenGenerator := jwtgen.NewTokenGenerator(&clock.Real{})
+	familyUsecase := usecase.NewFamilyUsecaseWithToken(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, txManager, &clock.Real{}, tokenGenerator)
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController)
 
@@ -84,6 +87,7 @@ func NewRouter() *echo.Echo {
 	e.POST("/families/invitations", familyHandler.InviteMembers)
 	e.POST("/families/apply", familyHandler.ApplyToFamily)
 	e.POST("/families/respond", familyHandler.RespondToJoinRequest)
+	e.POST("/families/join", familyHandler.JoinFamily)
 
 	e.PUT("/settings/notifications", notificationHandler.UpdateNotificationSetting)
 	e.GET("/settings/notifications", notificationHandler.GetNotificationSetting)

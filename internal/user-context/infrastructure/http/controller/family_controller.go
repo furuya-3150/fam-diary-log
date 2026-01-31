@@ -14,6 +14,7 @@ type FamilyController interface {
 	InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error
 	ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) error
 	RespondToJoinRequest(ctx context.Context, req *dto.RespondJoinRequestRequest, userID uuid.UUID) error
+	JoinFamily(ctx context.Context, userID uuid.UUID) (string, int64, error)
 }
 
 type familyController struct {
@@ -59,4 +60,8 @@ func (c *familyController) RespondToJoinRequest(ctx context.Context, req *dto.Re
 	// cast status to domain enum
 	status := domain.JoinRequestStatus(req.Status)
 	return c.fu.RespondToJoinRequest(ctx, req.ID, status, userID)
+}
+
+func (c *familyController) JoinFamily(ctx context.Context, userID uuid.UUID) (string, int64, error) {
+	return c.fu.JoinFamilyIfApproved(ctx, userID)
 }

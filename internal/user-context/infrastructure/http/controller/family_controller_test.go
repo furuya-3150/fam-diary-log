@@ -41,6 +41,14 @@ func (m *MockFamilyUsecase) RespondToJoinRequest(ctx context.Context, requestID 
     return args.Error(0)
 }
 
+func (m *MockFamilyUsecase) JoinFamilyIfApproved(ctx context.Context, userID uuid.UUID) (string, int64, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return "", 0, args.Error(2)
+	}
+	return args.String(0), args.Get(1).(int64), args.Error(2)
+}
+
 func TestFamilyController_CreateFamily_Success(t *testing.T) {
 	mockUsecase := new(MockFamilyUsecase)
 	controller := NewFamilyController(mockUsecase)
