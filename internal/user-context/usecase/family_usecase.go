@@ -24,6 +24,7 @@ type FamilyUsecase interface {
 	CreateFamily(ctx context.Context, name string, userID uuid.UUID) (*domain.Family, error)
 	InviteMembers(ctx context.Context, in InviteMembersInput) error
 	ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error
+	RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error
 }
 
 type familyUsecase struct {
@@ -161,5 +162,56 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 	}
 
 	// TODO: メール送信キューイングへポスト
+	return nil
+}
+
+func (fu *familyUsecase) RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error {
+	// join request が存在するか確認
+	jr, err := fu.fjr.FindByID(ctx, requestID)
+	if err != nil {
+		return err
+	}
+	if jr == nil {
+		return &errors.NotFoundError{Message: "join request not found"}
+	}
+	if jr.Status != domain.JoinRequestStatusPending || jr.RespondedAt != nil {
+		return &errors.BadRequestError{}
+	}
+	now := fu.clk.Now()
+	updates := map[string]interface{}{
+		"status":           int(status),
+		"responded_user_id": responderUserID,
+		"responded_at":     now,
+		"updated_at":       now,
+	}
+	ctx, err = fu.tm.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	if err := fu.fjr.UpdateStatusByID(ctx, requestID, updates); err != nil {
+		if err := fu.tm.RollbackTx(ctx); err != nil {
+			return err
+		}
+		return err
+	}
+	if status == domain.JoinRequestStatusApproved {
+		// 承認の場合、family member レコードを追加
+		member := &domain.FamilyMember{
+			FamilyID: jr.FamilyID,
+			UserID:   jr.UserID,
+			Role:     domain.RoleMember,
+		}
+		if err := fu.fmr.AddFamilyMember(ctx, member); err != nil {
+			if err := fu.tm.RollbackTx(ctx); err != nil {
+				return err
+			}
+			return err
+		}
+	}
+	if err := fu.tm.CommitTx(ctx); err != nil {
+		return err
+	}
+	// TODO: メール送信キューイングへポスト
+	
 	return nil
 }

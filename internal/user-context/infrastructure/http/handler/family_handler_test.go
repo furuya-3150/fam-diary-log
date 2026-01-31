@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	controller_dto "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -34,6 +35,11 @@ func (m *MockFamilyController) InviteMembers(ctx context.Context, req *controlle
 }
 
 func (m *MockFamilyController) ApplyToFamily(ctx context.Context, req *controller_dto.ApplyRequest, userID uuid.UUID) error {
+	args := m.Called(ctx, req, userID)
+	return args.Error(0)
+}
+
+func (m *MockFamilyController) RespondToJoinRequest(ctx context.Context, req *controller_dto.RespondJoinRequestRequest, userID uuid.UUID) error {
 	args := m.Called(ctx, req, userID)
 	return args.Error(0)
 }
@@ -206,6 +212,80 @@ func TestFamilyHandler_ApplyToFamily_ControllerError(t *testing.T) {
 	mockController.On("ApplyToFamily", mock.Anything, mock.AnythingOfType("*dto.ApplyRequest"), mock.AnythingOfType("uuid.UUID")).Return(assert.AnError)
 
 	_ = h.ApplyToFamily(c)
+	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	mockController.AssertExpectations(t)
+}
+
+func TestFamilyHandler_RespondToJoinRequest_Success(t *testing.T) {
+	e := echo.New()
+	mockController := new(MockFamilyController)
+	h := &familyHandler{familyController: mockController}
+
+	userID := uuid.New()
+	reqBody := &controller_dto.RespondJoinRequestRequest{
+		ID:     uuid.New(),
+		Status: int(domain.JoinRequestStatusApproved),
+	}
+	b, _ := json.Marshal(reqBody)
+	url := "/families/respond"
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	ctx := context.WithValue(context.Background(), "user_id", userID)
+	c.SetRequest(req.WithContext(ctx))
+
+	mockController.On("RespondToJoinRequest", mock.Anything, mock.AnythingOfType("*dto.RespondJoinRequestRequest"), mock.AnythingOfType("uuid.UUID")).Return(nil)
+
+	_ = h.RespondToJoinRequest(c)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+	mockController.AssertExpectations(t)
+}
+
+func TestFamilyHandler_RespondToJoinRequest_BadRequest_NoUser(t *testing.T) {
+	e := echo.New()
+	mockController := new(MockFamilyController)
+	h := &familyHandler{familyController: mockController}
+
+	reqBody := &controller_dto.RespondJoinRequestRequest{
+		ID:     uuid.New(),
+		Status: int(domain.JoinRequestStatusApproved),
+	}
+	b, _ := json.Marshal(reqBody)
+	url := "/families/respond"
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(b))
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// no user_id in context
+	_ = h.RespondToJoinRequest(c)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestFamilyHandler_RespondToJoinRequest_ControllerError(t *testing.T) {
+	e := echo.New()
+	mockController := new(MockFamilyController)
+	h := &familyHandler{familyController: mockController}
+
+	userID := uuid.New()
+	reqBody := &controller_dto.RespondJoinRequestRequest{
+		ID:     uuid.New(),
+		Status: int(domain.JoinRequestStatusRejected),
+	}
+	b, _ := json.Marshal(reqBody)
+	url := "/families/respond"
+	req := httptest.NewRequest(http.MethodPost, url, bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	ctx := context.WithValue(context.Background(), "user_id", userID)
+	c.SetRequest(req.WithContext(ctx))
+
+	mockController.On("RespondToJoinRequest", mock.Anything, mock.AnythingOfType("*dto.RespondJoinRequestRequest"), mock.AnythingOfType("uuid.UUID")).Return(assert.AnError)
+
+	_ = h.RespondToJoinRequest(c)
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
 	mockController.AssertExpectations(t)
 }

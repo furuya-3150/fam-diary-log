@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
@@ -33,6 +34,11 @@ func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.Invite
 func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error {
 	args := m.Called(ctx, token, userID)
 	return args.Error(0)
+}
+
+func (m *MockFamilyUsecase) RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error {
+    args := m.Called(ctx, requestID, status, responderUserID)
+    return args.Error(0)
 }
 
 func TestFamilyController_CreateFamily_Success(t *testing.T) {
@@ -69,4 +75,35 @@ func TestFamilyController_CreateFamily_Error(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, got)
 	mockUsecase.AssertExpectations(t)
+}
+
+func TestFamilyController_RespondToJoinRequest_Success(t *testing.T) {
+    mockUC := new(MockFamilyUsecase)
+    ctrl := NewFamilyController(mockUC)
+
+    ctx := context.Background()
+    reqID := uuid.New()
+    userID := uuid.New()
+
+    mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusApproved, userID).Return(nil)
+
+    req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusApproved)}
+    err := ctrl.RespondToJoinRequest(ctx, req, userID)
+    require.NoError(t, err)
+    mockUC.AssertExpectations(t)
+}
+
+func TestFamilyController_RespondToJoinRequest_ErrorPropagate(t *testing.T) {
+    mockUC := new(MockFamilyUsecase)
+    ctrl := NewFamilyController(mockUC)
+
+    ctx := context.Background()
+    reqID := uuid.New()
+    userID := uuid.New()
+
+    mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusRejected, userID).Return(errors.New("usecase err"))
+
+    req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusRejected)}
+    err := ctrl.RespondToJoinRequest(ctx, req, userID)
+    require.Error(t, err)
 }

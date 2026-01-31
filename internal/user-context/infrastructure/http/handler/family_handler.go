@@ -15,6 +15,7 @@ type FamilyHandler interface {
 	CreateFamily(c echo.Context) error
 	InviteMembers(c echo.Context) error
 	ApplyToFamily(c echo.Context) error
+	RespondToJoinRequest(c echo.Context) error
 }
 
 type familyHandler struct {
@@ -101,6 +102,26 @@ func (h *familyHandler) ApplyToFamily(c echo.Context) error {
 	}
 
 	if err := h.familyController.ApplyToFamily(ctx, &req, userID); err != nil {
+		return errors.RespondWithError(c, err)
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+// RespondToJoinRequest POST /families/respond
+func (h *familyHandler) RespondToJoinRequest(c echo.Context) error {
+	var req dto.RespondJoinRequestRequest
+	if err := c.Bind(&req); err != nil {
+		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request body: " + err.Error()})
+	}
+
+	ctx := c.Request().Context()
+	val := ctx.Value("user_id")
+	userID, ok := val.(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
+	}
+
+	if err := h.familyController.RespondToJoinRequest(ctx, &req, userID); err != nil {
 		return errors.RespondWithError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)
