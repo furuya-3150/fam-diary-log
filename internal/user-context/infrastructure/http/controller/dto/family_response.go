@@ -40,3 +40,13 @@ type RespondJoinRequestRequest struct {
 	ID     uuid.UUID `json:"id"`
 	Status int       `json:"status"`
 }
+
+type NotificationSettingRequest struct {
+	FamilyID           uuid.UUID `json:"family_id"`
+	PostCreatedEnabled bool      `json:"post_created_enabled"`
+}
+
+type NotificationSettingResponse struct {
+	FamilyID           uuid.UUID `json:"family_id"`
+	PostCreatedEnabled bool      `json:"post_created_enabled"`
+}
