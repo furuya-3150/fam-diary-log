@@ -35,3 +35,8 @@ type InviteMembersResponse struct {
 type ApplyRequest struct {
 	Token string `json:"token"`
 }
+
+type RespondJoinRequestRequest struct {
+	ID     uuid.UUID `json:"id"`
+	Status int       `json:"status"`
+}
