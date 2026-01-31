@@ -49,6 +49,11 @@ func NewRouter() *echo.Echo {
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController)
 
+	// Notification settings
+	notificationRepo := repository.NewNotificationSettingRepository(dbManager)
+	notificationUsecase := usecase.NewNotificationUsecase(notificationRepo)
+	notificationHandler := handler.NewNotificationHandler(notificationUsecase)
+
 	e := echo.New()
 
 	// Session middleware
@@ -79,6 +84,9 @@ func NewRouter() *echo.Echo {
 	e.POST("/families/invitations", familyHandler.InviteMembers)
 	e.POST("/families/apply", familyHandler.ApplyToFamily)
 	e.POST("/families/respond", familyHandler.RespondToJoinRequest)
+
+	e.PUT("/settings/notifications", notificationHandler.UpdateNotificationSetting)
+	e.GET("/settings/notifications", notificationHandler.GetNotificationSetting)
 
 	return e
 }
