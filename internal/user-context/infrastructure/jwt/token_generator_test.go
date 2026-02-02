@@ -19,7 +19,7 @@ func TestGenerateToken_ProducesValidJWT(t *testing.T) {
     cfg.Cfg.JWT.ExpiresIn = time.Duration(3600) * time.Second
     cfg.Cfg.JWT.Issuer = "test-issuer"
 
-    fixed := &clock.Fixed{Time: time.Unix(1000, 0)}
+    fixed := &clock.Fixed{Time: time.Now()}
     tg := NewTokenGenerator(fixed)
 
     userID := uuid.New()

@@ -12,7 +12,7 @@ import (
 
 type TokenGenerator interface {
 	GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error)
-}	
+}
 
 type tokenGenerator struct {
 	clk clock.Clock
@@ -29,7 +29,7 @@ func (t *tokenGenerator) GenerateToken(ctx context.Context, userID uuid.UUID, fa
 	claims := jwt.MapClaims{
 		"sub":       userID.String(),
 		"family_id": familyID.String(),
-		"role":      string(role),
+		"role":      role.String(),
 		"iat":       now.Unix(),
 		"exp":       expiresAt.Unix(),
 		"iss":       c.JWT.Issuer,
