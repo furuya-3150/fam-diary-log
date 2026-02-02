@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"time"
 
@@ -62,10 +61,8 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		return nil, err
 	}
 
-	log.Println(err, "hoge 1")
 	// Create or update streak
 	err = du.updateStreak(ctx, d.UserID, d.FamilyID)
-	log.Println(err)
 	if err != nil {
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to update streak", "error", err.Error())
@@ -73,17 +70,14 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		return nil, err
 	}
 
-	log.Println(err, "hoge 2")
 	// Publish diary created event
 	event := domain.NewDiaryCreatedEvent(diary.ID, diary.UserID, diary.FamilyID, diary.Content)
-	log.Println(err, "hoge 3")
 	if err := du.publisher.Publish(ctx, event); err != nil {
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to publish diary created event", "error", err.Error())
 		return nil, err
 	}
 	defer du.publisher.Close()
-	log.Println(err, "hoge 4")
 
 	du.tm.CommitTx(ctx)
 
