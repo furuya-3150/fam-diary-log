@@ -7,6 +7,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
+	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/ws"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
@@ -36,28 +37,9 @@ type familyUsecase struct {
 	tm  db.TransactionManager
 	clk clock.Clock
 	tg  jwtgen.TokenGenerator
+	pj  ws.Publisher
 }
 
-func NewFamilyUsecaseWithToken(
-	fr repository.FamilyRepository,
-	fmr repository.FamilyMemberRepository,
-	fiR repository.FamilyInvitationRepository,
-	fjr repository.FamilyJoinRequestRepository,
-	tm db.TransactionManager,
-	clk clock.Clock,
-	tg jwtgen.TokenGenerator) FamilyUsecase {
-	return &familyUsecase{
-		fr:  fr,
-		fmr: fmr,
-		fiR: fiR,
-		fjr: fjr,
-		tm:  tm,
-		clk: clk,
-		tg:  tg,
-	}
-}
-
-// Backwards-compatible constructor used by tests and simple callers.
 type noopTokenGenerator struct{}
 
 func (n *noopTokenGenerator) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error) {
@@ -70,10 +52,20 @@ func NewFamilyUsecase(
 	fiR repository.FamilyInvitationRepository,
 	fjr repository.FamilyJoinRequestRepository,
 	tm db.TransactionManager,
-	clk clock.Clock) FamilyUsecase {
-	return NewFamilyUsecaseWithToken(fr, fmr, fiR, fjr, tm, clk, &noopTokenGenerator{})
+	clk clock.Clock,
+	tg jwtgen.TokenGenerator,
+	pj ws.Publisher) FamilyUsecase {
+	return &familyUsecase{
+		fr:  fr,
+		fmr: fmr,
+		fiR: fiR,
+		fjr: fjr,
+		tm:  tm,
+		clk: clk,
+		tg:  tg,
+		pj:  pj,
+	}
 }
-
 
 func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (*domain.Family, error) {
 	already, err := u.fmr.IsUserAlreadyMember(ctx, userID)
@@ -203,7 +195,17 @@ func (fu *familyUsecase) RespondToJoinRequest(ctx context.Context, requestID uui
 	if err := fu.fjr.UpdateStatusByID(ctx, requestID, updates); err != nil {
 		return err
 	}
-	// TODO: メール送信キューイングへポスト
+
+	payload := map[string]interface{}{
+		"type":       ws.PayloadTypeJoinRequestResponse,
+		"status":     int(status),
+		"family_id":  jr.FamilyID,
+		"request_id": jr.ID,
+	}
+	// publish ws notification
+	_ = fu.pj.Publish(ctx, jr.UserID, payload)
+	// delete ws connections for the user
+	fu.pj.CloseUserConnections(jr.UserID)
 
 	return nil
 }
