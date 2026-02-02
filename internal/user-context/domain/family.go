@@ -56,8 +56,8 @@ type FamilyJoinRequest struct {
 	FamilyID        uuid.UUID  `gorm:"type:uuid;not null;index"`
 	UserID          uuid.UUID  `gorm:"type:uuid;not null;index"`
 	Status          JoinRequestStatus `gorm:"type:int;not null"`
-	RespondedUserID *uuid.UUID `gorm:"type:uuid"`
-	RespondedAt     *time.Time `gorm:""`
+	RespondedUserID uuid.UUID `gorm:"type:uuid"`
+	RespondedAt     time.Time `gorm:""`
 	CreatedAt       time.Time  `gorm:"autoCreateTime"`
 	UpdatedAt       time.Time  `gorm:"autoUpdateTime"`
 }

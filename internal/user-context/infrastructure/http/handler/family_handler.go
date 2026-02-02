@@ -6,6 +6,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	validator "github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -16,6 +17,7 @@ type FamilyHandler interface {
 	InviteMembers(c echo.Context) error
 	ApplyToFamily(c echo.Context) error
 	RespondToJoinRequest(c echo.Context) error
+	JoinFamily(c echo.Context) error
 }
 
 type familyHandler struct {
@@ -125,4 +127,32 @@ func (h *familyHandler) RespondToJoinRequest(c echo.Context) error {
 		return errors.RespondWithError(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)
+}
+
+// JoinFamily POST /families/join
+func (h *familyHandler) JoinFamily(c echo.Context) error {
+	ctx := c.Request().Context()
+	val := ctx.Value("user_id")
+	userID, ok := val.(uuid.UUID)
+	if !ok || userID == uuid.Nil {
+		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
+	}
+
+	token, expiresSec, err := h.familyController.JoinFamily(ctx, userID)
+	if err != nil {
+		return errors.RespondWithError(c, err)
+	}
+
+	accessTokenCookie := &http.Cookie{
+		Name:     "access_token",
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(expiresSec),
+	}
+	c.SetCookie(accessTokenCookie)
+
+	return response.RespondSuccess(c, http.StatusNoContent, nil)
 }

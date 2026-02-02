@@ -91,6 +91,14 @@ func (m *MockFamilyJoinRequestRepository) UpdateStatusByID(ctx context.Context, 
 	return args.Error(0)
 }
 
+func (m *MockFamilyJoinRequestRepository) FindApprovedByUser(ctx context.Context, userID uuid.UUID) (*domain.FamilyJoinRequest, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.FamilyJoinRequest), args.Error(1)
+}
+
 type MockTxManager struct{ mock.Mock }
 
 func (m *MockTxManager) BeginTx(ctx context.Context) (context.Context, error) {
@@ -110,7 +118,9 @@ func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
 	tir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, tir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, tir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -136,7 +146,9 @@ func TestFamilyUsecase_CreateFamily_AlreadyMember(t *testing.T) {
 	tir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, tir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, tir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -154,7 +166,9 @@ func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -175,7 +189,9 @@ func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -192,14 +208,15 @@ func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
 	require.Nil(t, result)
 }
 
-// InviteMembers: 正常系 - 新規作成
 func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 	fr := new(MockFamilyRepo)
 	fmr := new(MockFamilyMemberRepo)
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	familyID := uuid.New()
@@ -221,7 +238,9 @@ func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	familyID := uuid.New()
@@ -243,7 +262,9 @@ func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	familyID := uuid.New()
@@ -262,7 +283,9 @@ func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	familyID := uuid.New()
@@ -282,7 +305,9 @@ func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	familyID := uuid.New()
@@ -302,7 +327,9 @@ func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -327,7 +354,9 @@ func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -346,7 +375,9 @@ func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -364,7 +395,9 @@ func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -386,7 +419,9 @@ func TestFamilyUsecase_ApplyToFamily_AddMemberError(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -409,7 +444,9 @@ func TestFamilyUsecase_ApplyToFamily_AlreadyPending(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -433,8 +470,10 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
 	now := time.Now()
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now})
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now}, tg, pj)
 
 	ctx := context.Background()
 	requestID := uuid.New()
@@ -450,7 +489,6 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 	}
 
 	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.MatchedBy(func(updates map[string]interface{}) bool {
 		s, ok := updates["status"].(int)
 		if !ok || s != int(domain.JoinRequestStatusApproved) {
@@ -464,8 +502,9 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 		}
 		return true
 	})).Return(nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
-	tm.On("CommitTx", mock.Anything).Return(nil)
+
+	pj.On("Publish", mock.Anything, requestUserID, mock.Anything).Return(nil)
+	pj.On("CloseUserConnections", requestUserID).Return()
 
 	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
 	require.NoError(t, err)
@@ -482,7 +521,9 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testi
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
 	now := time.Now()
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now}, tg, pj)
 
 	ctx := context.Background()
 	requestID := uuid.New()
@@ -498,7 +539,6 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testi
 	}
 
 	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.MatchedBy(func(updates map[string]interface{}) bool {
 		s, ok := updates["status"].(int)
 		if !ok || s != int(domain.JoinRequestStatusRejected) {
@@ -506,13 +546,13 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testi
 		}
 		return true
 	})).Return(nil)
-	tm.On("CommitTx", mock.Anything).Return(nil)
+	pj.On("Publish", mock.Anything, requestUserID, mock.Anything).Return(nil)
+	pj.On("CloseUserConnections", requestUserID).Return()
 
 	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
 	require.NoError(t, err)
 
 	tjr.AssertExpectations(t)
-	tm.AssertExpectations(t)
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_NotFound(t *testing.T) {
@@ -521,7 +561,9 @@ func TestFamilyUsecase_RespondToJoinRequest_NotFound(t *testing.T) {
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	requestID := uuid.New()
@@ -541,7 +583,9 @@ func TestFamilyUsecase_RespondToJoinRequest_BadRequest_WhenNotPending(t *testing
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	requestID := uuid.New()
@@ -560,37 +604,15 @@ func TestFamilyUsecase_RespondToJoinRequest_BadRequest_WhenNotPending(t *testing
 	require.ErrorAs(t, err, &br)
 }
 
-func TestFamilyUsecase_RespondToJoinRequest_BeginTxError(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
-
-	ctx := context.Background()
-	requestID := uuid.New()
-	responderID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:     requestID,
-		Status: domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, errors.New("begin tx failed"))
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
-	require.Error(t, err)
-}
-
 func TestFamilyUsecase_RespondToJoinRequest_UpdateError_Rollback(t *testing.T) {
 	fr := new(MockFamilyRepo)
 	fmr := new(MockFamilyMemberRepo)
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
 	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
+	tg := new(MockTokenGen)
+	pj := new(MockPublisher)
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, pj)
 
 	ctx := context.Background()
 	requestID := uuid.New()
@@ -602,76 +624,9 @@ func TestFamilyUsecase_RespondToJoinRequest_UpdateError_Rollback(t *testing.T) {
 	}
 
 	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(errors.New("update failed"))
-	tm.On("RollbackTx", mock.Anything).Return(nil)
 
 	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
 	require.Error(t, err)
 	tm.AssertExpectations(t)
 }
-
-func TestFamilyUsecase_RespondToJoinRequest_AddMemberError_Rollback(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{})
-
-	ctx := context.Background()
-	requestID := uuid.New()
-	requestUserID := uuid.New()
-	responderID := uuid.New()
-	familyID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:       requestID,
-		FamilyID: familyID,
-		UserID:   requestUserID,
-		Status:   domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add member failed"))
-	tm.On("RollbackTx", mock.Anything).Return(nil)
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
-	require.Error(t, err)
-	tm.AssertExpectations(t)
-}
-
-func TestFamilyUsecase_RespondToJoinRequest_CommitError(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	now := time.Now()
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now})
-
-	ctx := context.Background()
-	requestID := uuid.New()
-	requestUserID := uuid.New()
-	responderID := uuid.New()
-	familyID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:       requestID,
-		FamilyID: familyID,
-		UserID:   requestUserID,
-		Status:   domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tm.On("BeginTx", mock.Anything).Return(ctx, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
-	tm.On("CommitTx", mock.Anything).Return(errors.New("commit failed"))
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
-	require.Error(t, err)
-}
-

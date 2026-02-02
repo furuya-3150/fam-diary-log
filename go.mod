@@ -40,6 +40,7 @@ require (
 
 require (
 	github.com/go-playground/validator/v10 v10.30.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect

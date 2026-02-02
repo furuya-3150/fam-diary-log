@@ -1,0 +1,97 @@
+package ws
+
+import (
+	"context"
+	"encoding/json"
+
+	"github.com/google/uuid"
+)
+
+type Publisher interface {
+	Publish(ctx context.Context, userID uuid.UUID, payload interface{}) error
+	CloseUserConnections(userID uuid.UUID)
+}
+
+type subscription struct {
+	userID uuid.UUID
+	conn   *connection
+}
+
+type message struct {
+	userID  uuid.UUID
+	payload []byte
+}
+
+// Hub keeps track of connections per user and broadcasts messages to them.
+type Hub struct {
+	register   chan subscription
+	unregister chan subscription
+	broadcast  chan message
+	closeUser  chan uuid.UUID
+	clients    map[uuid.UUID]map[*connection]struct{}
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		register:   make(chan subscription),
+		unregister: make(chan subscription),
+		broadcast:  make(chan message),
+		closeUser:  make(chan uuid.UUID),
+		clients:    make(map[uuid.UUID]map[*connection]struct{}),
+	}
+}
+
+func (h *Hub) Run() {
+	for {
+		select {
+		case s := <-h.register:
+			conns := h.clients[s.userID]
+			if conns == nil {
+				conns = make(map[*connection]struct{})
+				h.clients[s.userID] = conns
+			}
+			h.clients[s.userID][s.conn] = struct{}{}
+		case s := <-h.unregister:
+			if conns, ok := h.clients[s.userID]; ok {
+				delete(conns, s.conn)
+				s.conn.close()
+				if len(conns) == 0 {
+					delete(h.clients, s.userID)
+				}
+			}
+		case m := <-h.broadcast:
+			if conns, ok := h.clients[m.userID]; ok {
+				for c := range conns {
+					select {
+					case c.send <- m.payload:
+					default:
+						c.close()
+						delete(conns, c)
+					}
+				}
+			}
+		case uid := <-h.closeUser:
+			if conns, ok := h.clients[uid]; ok {
+				for c := range conns {
+					c.close()
+					delete(conns, c)
+				}
+				delete(h.clients, uid)
+			}
+		}
+	}
+}
+
+func (h *Hub) Publish(ctx context.Context, userID uuid.UUID, payload interface{}) error {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	h.broadcast <- message{userID: userID, payload: b}
+	return nil
+}
+
+// CloseUserConnections closes all WebSocket connections for the specified user.
+func (h *Hub) CloseUserConnections(userID uuid.UUID) {
+	h.closeUser <- userID
+}

@@ -14,6 +14,7 @@ type FamilyJoinRequestRepository interface {
 	FindPendingRequest(ctx context.Context, familyID, userID uuid.UUID) (*domain.FamilyJoinRequest, error)
 	FindByID(ctx context.Context, id uuid.UUID) (*domain.FamilyJoinRequest, error)
 	UpdateStatusByID(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error
+	FindApprovedByUser(ctx context.Context, userID uuid.UUID) (*domain.FamilyJoinRequest, error)
 }
 
 type familyJoinRequestRepository struct {
@@ -58,4 +59,17 @@ func (r *familyJoinRequestRepository) FindByID(ctx context.Context, id uuid.UUID
 func (r *familyJoinRequestRepository) UpdateStatusByID(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
 	dbConn := r.dm.DB(ctx)
 	return dbConn.Model(&domain.FamilyJoinRequest{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *familyJoinRequestRepository) FindApprovedByUser(ctx context.Context, userID uuid.UUID) (*domain.FamilyJoinRequest, error) {
+	dbConn := r.dm.DB(ctx)
+	var jr domain.FamilyJoinRequest
+	err := dbConn.Where("user_id = ? AND status = ?", userID, int(domain.JoinRequestStatusApproved)).First(&jr).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &jr, nil
 }
