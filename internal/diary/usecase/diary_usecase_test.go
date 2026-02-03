@@ -223,6 +223,7 @@ func TestDiaryUsecaseCreateRepositoryError(t *testing.T) {
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, diary).Return(nil, expectedErr)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
@@ -269,6 +270,7 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
 	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
 		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
 			return diaryEvent.DiaryID == diaryID && diaryEvent.UserID == userID && diaryEvent.FamilyID == familyID
@@ -311,6 +313,7 @@ func TestDiaryUsecase_Create_RepositoryError(t *testing.T) {
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, input).Return(nil, &pkgerrors.InternalError{Message: "database connection failed"})
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
@@ -346,6 +349,7 @@ func TestDiaryUsecaseCreateContextCancelled(t *testing.T) {
 
 	mockTm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	mockRepo.On("Create", mock.Anything, input).Return(nil, context.Canceled)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
@@ -397,6 +401,54 @@ func TestDiaryUsecaseListRepositoryError(t *testing.T) {
 	mockRepo.AssertExpectations(t)
 }
 
+// TestDiaryUsecaseCreateAlreadyPostedToday ensures user cannot post more than once per day
+func TestDiaryUsecaseCreateAlreadyPostedToday(t *testing.T) {
+	// Arrange
+	mockRepo := new(MockDiaryRepository)
+	mockTm := new(MockTransactionManager)
+	mockPub := new(MockPublisher)
+
+	userID := uuid.New()
+	familyID := uuid.New()
+
+	input := &domain.Diary{
+		ID:       uuid.New(),
+		UserID:   userID,
+		FamilyID: familyID,
+		Title:    "Test Diary",
+		Content:  "This is a test diary",
+	}
+
+	// fixed clock matching the usecase expectation (2026-02-03)
+	fixed := time.Date(2026, 2, 3, 12, 0, 0, 0, time.UTC)
+	clk := &clock.Fixed{Time: fixed}
+
+	// existing diary for today
+	existing := &domain.Diary{ID: uuid.New(), UserID: userID, FamilyID: familyID, Title: "old", Content: "old"}
+
+	// Expect List called to check today's diaries and return one
+	expectedStart := time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)
+	expectedEnd := time.Date(2026, 2, 3, 23, 59, 59, 0, time.UTC)
+	mockRepo.On("List", mock.Anything, mock.MatchedBy(func(c *domain.DiarySearchCriteria) bool {
+		return c.FamilyID == familyID && c.UserID == userID && c.StartDate.Equal(expectedStart) && c.EndDate.Equal(expectedEnd)
+	}), mock.Anything).Return([]*domain.Diary{existing}, nil)
+
+	usecase := NewDiaryUsecase(mockTm, mockRepo, new(MockStreakRepository), mockPub, clk)
+
+	// Act
+	_, err := usecase.Create(context.Background(), input)
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if _, ok := err.(*pkgerrors.ValidationError); !ok {
+		t.Fatalf("expected ValidationError, got %T", err)
+	}
+
+	mockRepo.AssertExpectations(t)
+}
+
 // ============================================
 // Event Publishing Tests
 // ============================================
@@ -431,6 +483,7 @@ func TestDiaryUsecase_Create_PublishEvent(t *testing.T) {
 	}
 
 	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	// Verify that Publish is called with correct event
 	var capturedEvent *domain.DiaryCreatedEvent
@@ -495,6 +548,7 @@ func TestDiaryUsecase_Create_PublishEventError(t *testing.T) {
 	}
 
 	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	// Simulate publisher error
 	publishErr := &pkgerrors.InternalError{Message: "failed to publish event"}
@@ -718,6 +772,7 @@ func TestDiaryUsecase_Create_CommitOnSuccess(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
 		return d.UserID == userID && d.FamilyID == familyID
 	})).Return(expected, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
@@ -768,6 +823,7 @@ func TestDiaryUsecase_Create_RollbackOnDiaryCreateError(t *testing.T) {
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	expectedErr := &pkgerrors.InternalError{Message: "database error"}
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(nil, expectedErr)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
@@ -815,6 +871,7 @@ func TestDiaryUsecase_Create_RollbackOnStreakUpdateError(t *testing.T) {
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
@@ -875,7 +932,7 @@ func TestDiaryUsecase_Create_RollbackOnPublishError(t *testing.T) {
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
-
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
@@ -920,6 +977,7 @@ func TestDiaryUsecase_Create_StreakCalculationOnFirstEntry(t *testing.T) {
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	mockStreakRepo := new(MockStreakRepository)
 	// First entry: no existing streak
@@ -973,6 +1031,7 @@ func TestDiaryUsecase_Create_StreakIncrementOnConsecutiveEntry(t *testing.T) {
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	// mockRepo.On("Close").Return(nil)
 
 	// Fixed time: 2026-01-15 (Thursday)
@@ -1037,6 +1096,7 @@ func TestDiaryUsecase_Create_StreakResetOnNonConsecutiveEntry(t *testing.T) {
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	// Fixed time: 2026-01-15 (Thursday)
 	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
@@ -1099,6 +1159,7 @@ func TestDiaryUsecase_Create_DuplicatePostError(t *testing.T) {
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
 	// Fixed time: 2026-01-15 (Thursday)

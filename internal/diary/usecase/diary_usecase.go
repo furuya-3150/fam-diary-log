@@ -12,6 +12,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/datetime"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 	"github.com/furuya-3150/fam-diary-log/pkg/validation"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -51,8 +52,32 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 	if du.publisher == nil {
 		return nil, &errors.LogicError{Message: "publisher is not set"}
 	}
+	
+	now := du.clk.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
 
-	d.ID = uuid.New()
+	query := &domain.DiarySearchCriteria{
+		FamilyID:  d.FamilyID,
+		UserID:    d.UserID,
+		StartDate: startOfDay,
+		EndDate:   endOfDay,
+	}
+	pagination := &pagination.Pagination{
+		Limit: 1,
+	}
+	// Check if a diary has already been posted today
+	if todaysDiaries, err := du.dr.List(ctx, query, pagination); err != nil {
+		return nil, err
+	} else if len(todaysDiaries) > 0 {
+		return nil, &errors.ValidationError{Message: "diary already posted today"}
+	}
+
+	// assign ID if not provided
+	if d.ID == uuid.Nil {
+		d.ID = uuid.New()
+	}
+
 	du.tm.BeginTx(ctx)
 
 	diary, err := du.dr.Create(ctx, d)
