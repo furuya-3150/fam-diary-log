@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"log"
 	"sync"
 	"testing"
 	"time"
@@ -101,68 +102,6 @@ func TestDiaryUsecaseIntegration_CreateWithTransaction(t *testing.T) {
 	assert.Equal(t, domain.DefaultStreakValue, retrievedStreak.CurrentStreak)
 }
 
-// TestDiaryUsecaseIntegration_CreateWithRollback tests transaction rollback on error
-func TestDiaryUsecaseIntegration_CreateWithRollback(t *testing.T) {
-	if testing.Short() {
-		t.Skip("Integration test - requires database setup")
-	}
-
-	// Arrange
-	deps := setupIntegrationTestDeps(t)
-	defer teardownIntegrationTest(t, deps)
-
-	userID := uuid.New()
-	familyID := uuid.New()
-
-	// Create initial diary
-	initialDiary := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Initial Diary",
-		Content:  "Initial diary content",
-	}
-
-	_, err := deps.DR.Create(context.Background(), initialDiary)
-	require.NoError(t, err)
-
-	// Count initial diaries
-	countBefore, err := deps.DR.GetCount(context.Background(), &domain.DiaryCountCriteria{
-		FamilyID:  familyID,
-		YearMonth: "2026-01",
-	})
-	require.NoError(t, err)
-
-	// Try to create another diary that might fail
-	// (This is a simplified scenario - in practice you'd trigger an actual error)
-	input := &domain.Diary{
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Should Rollback",
-		Content:  "This diary might not be persisted",
-	}
-
-	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
-	clk := &clock.Fixed{Time: fixedTime}
-	usecase := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk)
-
-	// Act
-	result, err := usecase.Create(context.Background(), input)
-
-	// Assert - verify only one diary exists (the initial one)
-	require.NoError(t, err)
-	require.NotNil(t, result)
-
-	countAfter, err := deps.DR.GetCount(context.Background(), &domain.DiaryCountCriteria{
-		FamilyID:  familyID,
-		YearMonth: "2026-01",
-	})
-	require.NoError(t, err)
-
-	// Should have exactly 2 diaries now
-	assert.Equal(t, countBefore+1, countAfter)
-}
-
 // TestDiaryUsecaseIntegration_StreakCalculationFlow tests complete streak calculation flow
 func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 	if testing.Short() {
@@ -177,7 +116,8 @@ func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 	familyID := uuid.New()
 
 	// Day 1: Create first diary
-	day1Time := time.Date(2026, 1, 13, 10, 0, 0, 0, time.UTC)
+	day1Time := time.Date(2026, 1, 13, 10, 0, 0, 0, time.Local)
+	log.Println("Day 1 Time:", day1Time)
 	clk1 := &clock.Fixed{Time: day1Time}
 	usecase1 := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk1)
 
@@ -198,7 +138,7 @@ func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 	assert.Equal(t, domain.DefaultStreakValue, streak1.CurrentStreak)
 
 	// Day 2: Create second diary (consecutive)
-	day2Time := time.Date(2026, 1, 14, 10, 0, 0, 0, time.UTC)
+	day2Time := time.Date(2026, 1, 14, 10, 0, 0, 0, time.Local)
 	clk2 := &clock.Fixed{Time: day2Time}
 	usecase2 := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk2)
 
@@ -219,7 +159,7 @@ func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 	assert.Equal(t, domain.DefaultStreakValue+1, streak2.CurrentStreak)
 
 	// Day 4 (Gap): Create third diary (non-consecutive)
-	day4Time := time.Date(2026, 1, 16, 10, 0, 0, 0, time.UTC)
+	day4Time := time.Date(2026, 1, 16, 10, 0, 0, 0, time.Local)
 	clk4 := &clock.Fixed{Time: day4Time}
 	usecase4 := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk4)
 

@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"log"
 	"log/slog"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/datetime"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 	"github.com/furuya-3150/fam-diary-log/pkg/validation"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -52,8 +52,32 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 	if du.publisher == nil {
 		return nil, &errors.LogicError{Message: "publisher is not set"}
 	}
+	
+	now := du.clk.Now()
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
 
-	d.ID = uuid.New()
+	query := &domain.DiarySearchCriteria{
+		FamilyID:  d.FamilyID,
+		UserID:    d.UserID,
+		StartDate: startOfDay,
+		EndDate:   endOfDay,
+	}
+	pagination := &pagination.Pagination{
+		Limit: 1,
+	}
+	// Check if a diary has already been posted today
+	if todaysDiaries, err := du.dr.List(ctx, query, pagination); err != nil {
+		return nil, err
+	} else if len(todaysDiaries) > 0 {
+		return nil, &errors.ValidationError{Message: "diary already posted today"}
+	}
+
+	// assign ID if not provided
+	if d.ID == uuid.Nil {
+		d.ID = uuid.New()
+	}
+
 	du.tm.BeginTx(ctx)
 
 	diary, err := du.dr.Create(ctx, d)
@@ -62,10 +86,8 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		return nil, err
 	}
 
-	log.Println(err, "hoge 1")
 	// Create or update streak
 	err = du.updateStreak(ctx, d.UserID, d.FamilyID)
-	log.Println(err)
 	if err != nil {
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to update streak", "error", err.Error())
@@ -73,17 +95,14 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		return nil, err
 	}
 
-	log.Println(err, "hoge 2")
 	// Publish diary created event
 	event := domain.NewDiaryCreatedEvent(diary.ID, diary.UserID, diary.FamilyID, diary.Content)
-	log.Println(err, "hoge 3")
 	if err := du.publisher.Publish(ctx, event); err != nil {
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to publish diary created event", "error", err.Error())
 		return nil, err
 	}
 	defer du.publisher.Close()
-	log.Println(err, "hoge 4")
 
 	du.tm.CommitTx(ctx)
 

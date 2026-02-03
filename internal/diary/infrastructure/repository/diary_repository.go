@@ -6,6 +6,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
+	"github.com/google/uuid"
 )
 
 type DiaryRepository interface {
@@ -38,6 +39,11 @@ func (dr *diaryRepository) List(ctx context.Context, criteria *domain.DiarySearc
 	var diaries []*domain.Diary
 
 	q := db.Where("family_id = ?", criteria.FamilyID)
+
+	// If filtering by user, add condition
+	if criteria.UserID != uuid.Nil {
+		q = q.Where("user_id = ?", criteria.UserID)
+	}
 
 	if !criteria.StartDate.IsZero() {
 		q = q.Where("created_at >= ?", criteria.StartDate)
