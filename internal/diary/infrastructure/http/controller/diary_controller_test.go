@@ -24,8 +24,8 @@ func (m *MockDiaryUsecase) Create(ctx context.Context, diary *domain.Diary) (*do
 	return args.Get(0).(*domain.Diary), args.Error(1)
 }
 
-func (m *MockDiaryUsecase) List(ctx context.Context, familyID uuid.UUID) ([]*domain.Diary, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockDiaryUsecase) List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]*domain.Diary, error) {
+	args := m.Called(ctx, familyID, targetDate)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -365,10 +365,10 @@ func TestDiaryController_List_Success(t *testing.T) {
 		},
 	}
 
-	mockUsecase.On("List", mock.Anything, familyID).Return(expectedDiaries, nil)
+	mockUsecase.On("List", mock.Anything, familyID, "2026-01-15").Return(expectedDiaries, nil)
 
 	// Call controller
-	result, err := controller.List(context.Background(), familyID)
+	result, err := controller.List(context.Background(), familyID, "2026-01-15")
 
 	// Verify result
 	if err != nil {
@@ -404,10 +404,10 @@ func TestDiaryController_List_ValidationError(t *testing.T) {
 	familyID := uuid.New()
 
 	validationErr := &errors.ValidationError{Message: "invalid date format"}
-	mockUsecase.On("List", mock.Anything, familyID).Return(nil, validationErr)
+	mockUsecase.On("List", mock.Anything, familyID, mock.Anything).Return(nil, validationErr)
 
 	// Call controller
-	result, err := controller.List(context.Background(), familyID)
+	result, err := controller.List(context.Background(), familyID, "invalid-date")
 
 	// Verify result
 	if err == nil {
@@ -431,10 +431,10 @@ func TestDiaryController_List_InternalError(t *testing.T) {
 	familyID := uuid.New()
 
 	internalErr := &errors.InternalError{Message: "database error"}
-	mockUsecase.On("List", mock.Anything, familyID).Return(nil, internalErr)
+	mockUsecase.On("List", mock.Anything, familyID, mock.Anything).Return(nil, internalErr)
 
 	// Call controller
-	result, err := controller.List(context.Background(), familyID)
+	result, err := controller.List(context.Background(), familyID, "2026-01-15")
 
 	// Verify result
 	if err == nil {

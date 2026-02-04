@@ -7,8 +7,10 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/context"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller"
+	dto "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/furuya-3150/fam-diary-log/pkg/response"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
@@ -47,7 +49,17 @@ func (dh *DiaryHandler) Create(e echo.Context) error {
 func (dh *DiaryHandler) List(e echo.Context) error {
 	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
 
-	res, err := dh.dc.List(e.Request().Context(), familyID)
+	// validate query
+	q := dto.DiaryListQuery{TargetDate: e.QueryParam("target_date")}
+	v := validator.New()
+	if err := v.Struct(q); err != nil {
+		validationErr := &errors.ValidationError{Message: "target_date is required and must be YYYY-MM-DD"}
+		return errors.RespondWithError(e, validationErr)
+	}
+
+	ctx := e.Request().Context()
+
+	res, err := dh.dc.List(ctx, familyID, q.TargetDate)
 	if err != nil {
 		log.Println("controller list error", err)
 		return errors.RespondWithError(e, err)

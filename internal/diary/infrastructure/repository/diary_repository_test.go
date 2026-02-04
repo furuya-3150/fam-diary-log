@@ -372,7 +372,6 @@ func TestDiaryRepository_GetCount_Success(t *testing.T) {
 	// Create test diaries for 2026-01
 	for i := 0; i < 3; i++ {
 		diary := &domain.Diary{
-			ID:       uuid.New(),
 			FamilyID: familyID,
 			UserID:   userID,
 			Title:    "Test Diary " + strconv.Itoa(i+1),
@@ -387,7 +386,7 @@ func TestDiaryRepository_GetCount_Success(t *testing.T) {
 	// Count diaries for 2026-01
 	criteria := &domain.DiaryCountCriteria{
 		FamilyID:  familyID,
-		YearMonth: "2026-01",
+		YearMonth: time.Now().Format("2006-01"),
 	}
 
 	count, err := repo.GetCount(context.Background(), criteria)
@@ -509,7 +508,7 @@ func TestDiaryRepository_GetCount_DifferentFamilies(t *testing.T) {
 	// Count for family 1
 	criteria1 := &domain.DiaryCountCriteria{
 		FamilyID:  familyID1,
-		YearMonth: "2026-01",
+		YearMonth: time.Now().Format("2006-01"),
 	}
 	count1, err := repo.GetCount(context.Background(), criteria1)
 	if err != nil {
@@ -519,7 +518,7 @@ func TestDiaryRepository_GetCount_DifferentFamilies(t *testing.T) {
 	// Count for family 2
 	criteria2 := &domain.DiaryCountCriteria{
 		FamilyID:  familyID2,
-		YearMonth: "2026-01",
+		YearMonth: time.Now().Format("2006-01"),
 	}
 	count2, err := repo.GetCount(context.Background(), criteria2)
 	if err != nil {

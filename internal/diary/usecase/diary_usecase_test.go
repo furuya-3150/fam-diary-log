@@ -391,7 +391,7 @@ func TestDiaryUsecaseListRepositoryError(t *testing.T) {
 	}), mock.Anything).Return(nil, repositoryErr)
 
 	// Call usecase
-	result, err := usecase.List(context.Background(), familyID)
+	result, err := usecase.List(context.Background(), familyID, "2026-01-15")
 
 	// Verify error
 	assert.Error(t, err)

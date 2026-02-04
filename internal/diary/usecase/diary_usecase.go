@@ -20,7 +20,7 @@ import (
 
 type DiaryUsecase interface {
 	Create(ctx context.Context, d *domain.Diary) (*domain.Diary, error)
-	List(ctx context.Context, familyID uuid.UUID) ([]*domain.Diary, error)
+	List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]*domain.Diary, error)
 	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
 	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*domain.Streak, error)
 }
@@ -52,7 +52,7 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 	if du.publisher == nil {
 		return nil, &errors.LogicError{Message: "publisher is not set"}
 	}
-	
+
 	now := du.clk.Now()
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
@@ -148,15 +148,14 @@ func (du *diaryUsecase) updateStreak(ctx context.Context, userID, familyID uuid.
 	return nil
 }
 
-func (du *diaryUsecase) List(ctx context.Context, familyID uuid.UUID) ([]*domain.Diary, error) {
-	// Clock を使用（テストでモック化可能）
-	targetDate := du.clk.Now()
-
-	// その週の開始日（月曜日）と終了日（日曜日）を計算
-	weekStart, weekEnd := datetime.GetWeekRange(targetDate)
-
-	// DiarySearchCriteria を構築
-	query := &domain.DiarySearchCriteria{
+func (du *diaryUsecase) List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]*domain.Diary, error) {
+	var query *domain.DiarySearchCriteria
+	parsedDate, err := time.Parse("2006-01-02", targetDate)
+	if err != nil {
+		return nil, &errors.ValidationError{Message: "target_date must be in YYYY-MM-DD format"}
+	}
+	weekStart, weekEnd := datetime.GetWeekRange(parsedDate)
+	query = &domain.DiarySearchCriteria{
 		FamilyID:  familyID,
 		StartDate: weekStart,
 		EndDate:   weekEnd,
