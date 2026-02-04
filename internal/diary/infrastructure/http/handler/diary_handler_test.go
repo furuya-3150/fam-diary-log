@@ -30,8 +30,8 @@ func (m *MockDiaryController) Create(ctx context.Context, d *domain.Diary) (*dto
 	return args.Get(0).(*dto.DiaryResponse), args.Error(1)
 }
 
-func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID) ([]dto.DiaryResponse, error) {
-	args := m.Called(ctx, familyID)
+func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]dto.DiaryResponse, error) {
+	args := m.Called(ctx, familyID, targetDate)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -317,10 +317,10 @@ func TestDiaryHandler_List_Success(t *testing.T) {
 
 	mockController.On("List", mock.MatchedBy(func(ctx context.Context) bool {
 		return ctx.Value(infctx.FamilyIDKey) == familyID
-	}), familyID).Return(expectedResponses, nil)
+	}), familyID, mock.Anything).Return(expectedResponses, nil)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
+	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=2026-01-01", nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
@@ -365,10 +365,10 @@ func TestDiaryHandler_List_Error(t *testing.T) {
 	userID := uuid.New()
 
 	internalErr := &errors.InternalError{Message: "database error"}
-	mockController.On("List", mock.Anything, familyID).Return(nil, internalErr)
+	mockController.On("List", mock.Anything, familyID, mock.Anything).Return(nil, internalErr)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
+	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=2026-01-01", nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
@@ -389,6 +389,82 @@ func TestDiaryHandler_List_Error(t *testing.T) {
 	}
 
 	mockController.AssertExpectations(t)
+}
+
+// missing target_date should return 400 and controller should not be called
+func TestDiaryHandler_List_MissingTargetDate(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	// No expectation for List: it should not be called
+
+	// Create request without target_date
+	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.List(c)
+	if err != nil {
+		t.Logf("expected error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	// Ensure controller.List was not called
+	mockController.AssertNotCalled(t, "List")
+}
+
+// invalid target_date format should return 400 and controller should not be called
+func TestDiaryHandler_List_InvalidTargetDate(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	// Create request with invalid target_date
+	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=invalid-date", nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.List(c)
+	if err != nil {
+		t.Logf("expected error: %v", err)
+	}
+
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	// Ensure controller.List was not called
+	mockController.AssertNotCalled(t, "List")
 }
 
 // TestDiaryHandler_GetCount_Success tests successful count retrieval
