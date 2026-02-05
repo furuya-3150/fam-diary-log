@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"log/slog"
 
-	"github.com/furuya-3150/fam-diary-log/internal/mail/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/mail/usecase"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-mailer/domain"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-mailer/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/broker/consumer"
 )
 

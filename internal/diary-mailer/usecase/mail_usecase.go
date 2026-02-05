@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/furuya-3150/fam-diary-log/internal/mail/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/mail/infrastructure/sender"
-	"github.com/furuya-3150/fam-diary-log/internal/mail/infrastructure/template"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-mailer/domain"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/sender"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/template"
 )
 
 type MailUsecase interface {
