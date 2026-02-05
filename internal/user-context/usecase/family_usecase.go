@@ -2,8 +2,11 @@ package usecase
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
+	maildomain "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/domain"
+	mailbroker "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/broker"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
@@ -113,7 +116,7 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 		if err != nil {
 			return err
 		}
-		return nil
+		return err
 	}
 	inv := &domain.FamilyInvitation{
 		FamilyID:        input.FamilyID,
@@ -124,8 +127,26 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 	if err := fu.fiR.CreateInvitation(ctx, inv); err != nil {
 		return err
 	}
-	// TODO: メール送信キューイングへポスト
-	// 招待メール送信
+	// publish mail send event to broker
+	pub := mailbroker.NewDiaryMailerPublisher(slog.Default())
+	defer pub.Close()
+
+	event := &maildomain.MailSendEvent{
+		TemplateID: "family_invite_v1:ja",
+		To:         input.Emails,
+		Locale:     "ja",
+		Payload: map[string]interface{}{
+			"invitation_token": token,
+			"family_id":        input.FamilyID.String(),
+			"inviter_user_id":  input.InviterUserID.String(),
+			"expires_at":       expiresAt.Format(time.RFC3339),
+		},
+	}
+
+	if err := pub.Publish(ctx, event); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -169,7 +190,24 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 		return err
 	}
 
-	// TODO: メール送信キューイングへポスト
+	// publish join request notification to mail queue
+	pub2 := mailbroker.NewDiaryMailerPublisher(slog.Default())
+	defer pub2.Close()
+
+	event2 := &maildomain.MailSendEvent{
+		TemplateID: "family_request_v1:ja",
+		Locale:     "ja",
+		Payload: map[string]interface{}{
+			"family_id":  inv.FamilyID.String(),
+			"user_id":    userID.String(),
+			"request_id": jr.ID.String(),
+		},
+	}
+
+	if err := pub2.Publish(ctx, event2); err != nil {
+		return err
+	}
+
 	return nil
 }
 
