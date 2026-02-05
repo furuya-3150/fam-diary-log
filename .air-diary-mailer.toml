@@ -4,8 +4,8 @@ tmp_dir = "tmp"
 
 [build]
   args_bin = []
-  bin = "tmp/mail"
-  cmd = "go build -o ./tmp/mail ./cmd/mail"
+  bin = "tmp/diary-mailer"
+  cmd = "go build -o ./tmp/diary-mailer ./cmd/diary-mailer"
   delay = 1000
   exclude_dir = ["assets", "tmp", "vendor", "testdata"]
   exclude_file = []
@@ -13,11 +13,11 @@ tmp_dir = "tmp"
   exclude_unchanged = false
   follow_symlink = false
   full_bin = ""
-  include_dir = ["cmd/mail", "internal/mail"]
+  include_dir = ["cmd/diary-mailer", "internal/diary-mailer"]
   include_ext = ["go", "tpl", "tmpl", "html"]
   include_file = []
   kill_delay = "0s"
-  log = "tmp/mail-build.log"  # ← ビルドログを分離
+  log = "tmp/diary-mailer-build.log"  # ← ビルドログを分離
   poll = false
   poll_interval = 0
   post_cmd = []
