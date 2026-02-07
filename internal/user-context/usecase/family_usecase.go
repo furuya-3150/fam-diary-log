@@ -8,6 +8,7 @@ import (
 	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/ws"
+	"github.com/furuya-3150/fam-diary-log/pkg/broker/publisher"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
@@ -38,12 +39,7 @@ type familyUsecase struct {
 	clk clock.Clock
 	tg  jwtgen.TokenGenerator
 	pj  ws.Publisher
-}
-
-type noopTokenGenerator struct{}
-
-func (n *noopTokenGenerator) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error) {
-	return "", 0, nil
+	mp  publisher.Publisher
 }
 
 func NewFamilyUsecase(
@@ -54,7 +50,9 @@ func NewFamilyUsecase(
 	tm db.TransactionManager,
 	clk clock.Clock,
 	tg jwtgen.TokenGenerator,
-	pj ws.Publisher) FamilyUsecase {
+	pj ws.Publisher,
+	mp publisher.Publisher,
+) FamilyUsecase {
 	return &familyUsecase{
 		fr:  fr,
 		fmr: fmr,
@@ -64,6 +62,7 @@ func NewFamilyUsecase(
 		clk: clk,
 		tg:  tg,
 		pj:  pj,
+		mp:  mp,
 	}
 }
 
@@ -113,7 +112,7 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 		if err != nil {
 			return err
 		}
-		return nil
+		return err
 	}
 	inv := &domain.FamilyInvitation{
 		FamilyID:        input.FamilyID,
@@ -124,8 +123,25 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 	if err := fu.fiR.CreateInvitation(ctx, inv); err != nil {
 		return err
 	}
-	// TODO: メール送信キューイングへポスト
-	// 招待メール送信
+	// TODO: route.go インスタンス生成い
+	defer fu.mp.Close()
+
+	event := &domain.MailSendEvent{
+		TemplateID: "family_invite_v1",
+		To:         input.Emails,
+		Locale:     "ja",
+		Payload: map[string]interface{}{
+			"invitation_token": token,
+			"family_id":        input.FamilyID.String(),
+			"inviter_user_id":  input.InviterUserID.String(),
+			"expires_at":       expiresAt.Format(time.RFC3339),
+		},
+	}
+
+	if err := fu.mp.Publish(ctx, event); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -169,7 +185,23 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 		return err
 	}
 
-	// TODO: メール送信キューイングへポスト
+	// publish join request notification to mail queue
+	defer fu.mp.Close()
+
+	event := &domain.MailSendEvent{
+		TemplateID: "family_request_v1",
+		Locale:     "ja",
+		Payload: map[string]interface{}{
+			"family_id":  inv.FamilyID.String(),
+			"user_id":    userID.String(),
+			"request_id": jr.ID.String(),
+		},
+	}
+
+	if err := fu.mp.Publish(ctx, event); err != nil {
+		return err
+	}
+
 	return nil
 }
 

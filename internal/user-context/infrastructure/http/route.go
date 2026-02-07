@@ -1,8 +1,10 @@
 package http
 
 import (
+	"log/slog"
 	"net/http"
 
+	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/broker"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/config"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/handler"
@@ -42,6 +44,7 @@ func NewRouter() *echo.Echo {
 	userController := controller.NewUserController(userUsecase)
 	userHandler := handler.NewUserHandler(userController)
 
+
 	// Family
 	familyRepo := repository.NewFamilyRepository(dbManager)
 	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
@@ -50,12 +53,15 @@ func NewRouter() *echo.Echo {
 	// token generator (infra) for signing JWTs
 	tokenGenerator := jwtgen.NewTokenGenerator(&clock.Real{})
 
+	// mail broker publisher
+	pub := broker.NewDiaryMailerPublisher(slog.Default())
+
 	// WebSocket hub
 	hub := ws.NewHub()
 	// Run the hub
 	go hub.Run()
 	wsHandler := ws.NewWSHandler(hub)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, txManager, &clock.Real{}, tokenGenerator, hub)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, txManager, &clock.Real{}, tokenGenerator, hub, pub)
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController)
 

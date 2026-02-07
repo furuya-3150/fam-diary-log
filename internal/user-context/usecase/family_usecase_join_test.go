@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
-	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -31,17 +30,8 @@ func (m *MockPublisher) CloseUserConnections(userID uuid.UUID) {
 }
 
 func TestJoinFamilyIfApproved_Success(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	fjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	tg := new(MockTokenGen)
-	pj := new(MockPublisher)
-	now := clock.Fixed{}
-	u := NewFamilyUsecase(fr, fmr, fir, fjr, tm, &now, tg, pj)
+	ctx, _, fmr, _, fjr, _, tg, _, _, u := newTestEnv()
 
-	ctx := context.Background()
 	userID := uuid.New()
 	famID := uuid.New()
 
@@ -65,15 +55,7 @@ func TestJoinFamilyIfApproved_Success(t *testing.T) {
 }
 
 func TestJoinFamilyIfApproved_NoApprovedRequest(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	fjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	tg := new(MockTokenGen)
-	pj := new(MockPublisher)
-
-	u := NewFamilyUsecase(fr, fmr, fir, fjr, tm, &clock.Fixed{}, tg, pj)
+	_, _, _, _, fjr, _, _, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -85,15 +67,7 @@ func TestJoinFamilyIfApproved_NoApprovedRequest(t *testing.T) {
 }
 
 func TestJoinFamilyIfApproved_AlreadyMember(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	fjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	tg := new(MockTokenGen)
-	pj := new(MockPublisher)
-
-	u := NewFamilyUsecase(fr, fmr, fir, fjr, tm, &clock.Fixed{}, tg, pj)
+	_, _, fmr, _, fjr, _, _, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -105,15 +79,7 @@ func TestJoinFamilyIfApproved_AlreadyMember(t *testing.T) {
 }
 
 func TestJoinFamilyIfApproved_AddMemberError(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	fjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	tg := new(MockTokenGen)
-	pj := new(MockPublisher)
-	now := clock.Fixed{}
-	u := NewFamilyUsecase(fr, fmr, fir, fjr, tm, &now, tg, pj)
+	_, _, fmr, _, fjr, _, _, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -131,15 +97,7 @@ func TestJoinFamilyIfApproved_AddMemberError(t *testing.T) {
 }
 
 func TestJoinFamilyIfApproved_TokenGenError(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	fjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	tg := new(MockTokenGen)
-	pj := new(MockPublisher)
-	now := clock.Fixed{}
-	u := NewFamilyUsecase(fr, fmr, fir, fjr, tm, &now, tg, pj)
+	_, _, fmr, _, fjr, _, tg, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
