@@ -2,15 +2,13 @@ package usecase
 
 import (
 	"context"
-	"log/slog"
 	"time"
 
-	maildomain "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/domain"
-	mailbroker "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/broker"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/ws"
+	"github.com/furuya-3150/fam-diary-log/pkg/broker/publisher"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
@@ -41,12 +39,7 @@ type familyUsecase struct {
 	clk clock.Clock
 	tg  jwtgen.TokenGenerator
 	pj  ws.Publisher
-}
-
-type noopTokenGenerator struct{}
-
-func (n *noopTokenGenerator) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error) {
-	return "", 0, nil
+	mp  publisher.Publisher
 }
 
 func NewFamilyUsecase(
@@ -57,7 +50,9 @@ func NewFamilyUsecase(
 	tm db.TransactionManager,
 	clk clock.Clock,
 	tg jwtgen.TokenGenerator,
-	pj ws.Publisher) FamilyUsecase {
+	pj ws.Publisher,
+	mp publisher.Publisher,
+) FamilyUsecase {
 	return &familyUsecase{
 		fr:  fr,
 		fmr: fmr,
@@ -67,6 +62,7 @@ func NewFamilyUsecase(
 		clk: clk,
 		tg:  tg,
 		pj:  pj,
+		mp:  mp,
 	}
 }
 
@@ -127,12 +123,11 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 	if err := fu.fiR.CreateInvitation(ctx, inv); err != nil {
 		return err
 	}
-	// publish mail send event to broker
-	pub := mailbroker.NewDiaryMailerPublisher(slog.Default())
-	defer pub.Close()
+	// TODO: route.go インスタンス生成い
+	defer fu.mp.Close()
 
-	event := &maildomain.MailSendEvent{
-		TemplateID: "family_invite_v1:ja",
+	event := &domain.MailSendEvent{
+		TemplateID: "family_invite_v1",
 		To:         input.Emails,
 		Locale:     "ja",
 		Payload: map[string]interface{}{
@@ -143,7 +138,7 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 		},
 	}
 
-	if err := pub.Publish(ctx, event); err != nil {
+	if err := fu.mp.Publish(ctx, event); err != nil {
 		return err
 	}
 
@@ -191,11 +186,10 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 	}
 
 	// publish join request notification to mail queue
-	pub2 := mailbroker.NewDiaryMailerPublisher(slog.Default())
-	defer pub2.Close()
+	defer fu.mp.Close()
 
-	event2 := &maildomain.MailSendEvent{
-		TemplateID: "family_request_v1:ja",
+	event := &domain.MailSendEvent{
+		TemplateID: "family_request_v1",
 		Locale:     "ja",
 		Payload: map[string]interface{}{
 			"family_id":  inv.FamilyID.String(),
@@ -204,7 +198,7 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 		},
 	}
 
-	if err := pub2.Publish(ctx, event2); err != nil {
+	if err := fu.mp.Publish(ctx, event); err != nil {
 		return err
 	}
 

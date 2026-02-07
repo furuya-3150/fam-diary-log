@@ -147,4 +147,4 @@ services:
       - .:/app
     depends_on:
       - rabbitmq
-    command: ["air", "-c", ".air-mailer.toml"]
+    command: ["air", "-c", ".air-diary-mailer.toml"]

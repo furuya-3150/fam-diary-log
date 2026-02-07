@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	htmltmpl "html/template"
+	"log"
 	"text/template"
 )
 
@@ -71,9 +72,13 @@ func NewInMemoryStore() *InMemoryStore {
 
 func (s *InMemoryStore) Get(id, locale string) (*TemplateWrapper, error) {
 	key := fmt.Sprintf("%s:%s", id, locale)
+	log.Println("Looking up template with key:", key)
+	log.Println("Available templates:", s.templates["family_invite_v1:ja"])
 	if t, ok := s.templates[key]; ok {
+		log.Println("hoge")
 		return t, nil
 	}
+		log.Println("hoge2")
 	// fallback to default locale
 	key = fmt.Sprintf("%s:en", id)
 	if t, ok := s.templates[key]; ok {

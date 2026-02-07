@@ -7,11 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	mailBroker "github.com/furuya-3150/fam-diary-log/internal/mail/infrastructure/broker"
-	mailHandler "github.com/furuya-3150/fam-diary-log/internal/mail/infrastructure/handler"
-	mailSender "github.com/furuya-3150/fam-diary-log/internal/mail/infrastructure/sender"
-	mailTemplate "github.com/furuya-3150/fam-diary-log/internal/mail/infrastructure/template"
-	mailUsecase "github.com/furuya-3150/fam-diary-log/internal/mail/usecase"
+	mailBroker "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/broker"
+	mailHandler "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/handler"
+	mailSender "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/sender"
+	mailTemplate "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/infrastructure/template"
+	mailUsecase "github.com/furuya-3150/fam-diary-log/internal/diary-mailer/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/broker/consumer"
 	"github.com/furuya-3150/fam-diary-log/pkg/broker/rabbit"
 	"github.com/furuya-3150/fam-diary-log/pkg/logger"
@@ -28,7 +28,7 @@ func init() {
 	slog.SetDefault(log)
 
 	if os.Getenv("GO_ENV") == "dev" {
-		_ = godotenv.Load("./cmd/mail/.env")
+		_ = godotenv.Load("./cmd/diary-mailer/.env")
 	}
 }
 
