@@ -123,7 +123,6 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 	if err := fu.fiR.CreateInvitation(ctx, inv); err != nil {
 		return err
 	}
-	// TODO: route.go インスタンス生成い
 	defer fu.mp.Close()
 
 	event := &domain.MailSendEvent{
