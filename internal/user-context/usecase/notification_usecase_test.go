@@ -42,7 +42,7 @@ func TestNotificationUsecase_GetNotificationSetting_DefaultsWhenNotFound(t *test
 	s, err := u.GetNotificationSetting(ctx, userID, familyID)
 	require.NoError(t, err)
 	require.NotNil(t, s)
-	require.Equal(t, true, s.PostCreatedEnabled)
+	require.Equal(t, false, s.PostCreatedEnabled)
 }
 
 func TestNotificationUsecase_GetNotificationSetting_FromRepo(t *testing.T) {

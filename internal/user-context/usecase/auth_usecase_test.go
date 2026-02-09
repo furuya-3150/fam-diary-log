@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/config"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/oauth"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/google/uuid"
@@ -61,6 +60,14 @@ func (m *MockUserRepository) UpdateUser(ctx context.Context, user *domain.User) 
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
+func (m *MockUserRepository) GetAdminUsersByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*domain.User, error) {
+	args := m.Called(ctx, familyID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*domain.User), args.Error(1)
+}
+
 // MockOAuthProvider は OAuthProvider のモック
 type MockOAuthProvider struct {
 	mock.Mock
@@ -84,18 +91,19 @@ func (m *MockOAuthProvider) ExchangeCode(ctx context.Context, code string) (*oau
 	return args.Get(0).(*oauth.OAuthUserInfo), args.Error(1)
 }
 
-func setupAuthUsecase(t *testing.T, mockRepo *MockUserRepository, mockProvider *MockOAuthProvider) *authUsecase {
+func setupAuthUsecase(
+	t *testing.T,
+	mockRepo *MockUserRepository,
+	mockFamilyMemberRepo *MockFamilyMemberRepo,
+	mockProvider *MockOAuthProvider,
+	mockTokenGenerator *MockTokenGen,
+) *authUsecase {
 	// テスト用のJWT設定
-	testJWTConfig := config.JWTConfig{
-		Secret:    "test-secret-key",
-		ExpiresIn: 1 * time.Hour,
-		Issuer:    "test-issuer",
-	}
-
 	return &authUsecase{
 		authRepo:       mockRepo,
+		familyMemberRepo: mockFamilyMemberRepo,
 		googleProvider: mockProvider,
-		jwtConfig:      testJWTConfig,
+		tokenGenerator: mockTokenGenerator,
 	}
 }
 
@@ -137,7 +145,7 @@ func TestAuthUsecase_InitiateGoogleLogin(t *testing.T) {
 			mockProvider := new(MockOAuthProvider)
 			tt.setupMock(mockProvider)
 
-			usecase := setupAuthUsecase(t, mockRepo, mockProvider)
+			usecase := setupAuthUsecase(t, mockRepo, nil, mockProvider, nil)
 
 			authURL, state, err := usecase.InitiateGoogleLogin()
 
@@ -170,8 +178,10 @@ func TestAuthUsecase_InitiateGoogleLogin(t *testing.T) {
 
 func TestAuthUsecase_HandleGoogleCallback_NewUser(t *testing.T) {
 	mockRepo := new(MockUserRepository)
+	mockFamilyMemberRepo := new(MockFamilyMemberRepo)
 	mockProvider := new(MockOAuthProvider)
-	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
+	mockTokenGenerator := new(MockTokenGen)
+	usecase := setupAuthUsecase(t, mockRepo, mockFamilyMemberRepo, mockProvider, mockTokenGenerator)
 
 	ctx := context.Background()
 	code := "test-auth-code"
@@ -209,26 +219,29 @@ func TestAuthUsecase_HandleGoogleCallback_NewUser(t *testing.T) {
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}, nil)
+	mockFamilyMemberRepo.On("GetFamilyMemberByUserID", ctx, mock.AnythingOfType("uuid.UUID")).Return(nil, nil)
+	mockTokenGenerator.On("GenerateToken", ctx, mock.AnythingOfType("uuid.UUID"), uuid.Nil, domain.RoleUnknown).Return("jwt-access-token", nil)
 
 	// テスト実行
-	resp, err := usecase.HandleGoogleCallback(ctx, code)
+	isJoined, token, err := usecase.HandleGoogleCallback(ctx, code)
 
 	// 検証
 	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.Equal(t, "newuser@example.com", resp.User.Email)
-	assert.Equal(t, "New User", resp.User.Name)
-	assert.NotEmpty(t, resp.AccessToken)
-	assert.Equal(t, int64(3600), resp.ExpiresIn)
+	assert.NotEmpty(t, token)
+	assert.False(t, isJoined)
 
 	mockProvider.AssertExpectations(t)
 	mockRepo.AssertExpectations(t)
+	mockFamilyMemberRepo.AssertExpectations(t)
+	mockTokenGenerator.AssertExpectations(t)
 }
 
 func TestAuthUsecase_HandleGoogleCallback_ExistingUser(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
-	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
+	mockFamilyMemberRepo := new(MockFamilyMemberRepo)
+	mockTokenGenerator := new(MockTokenGen)
+	usecase := setupAuthUsecase(t, mockRepo, mockFamilyMemberRepo, mockProvider, mockTokenGenerator)
 
 	ctx := context.Background()
 	code := "test-auth-code"
@@ -253,27 +266,30 @@ func TestAuthUsecase_HandleGoogleCallback_ExistingUser(t *testing.T) {
 	mockProvider.On("ExchangeCode", ctx, code).Return(userInfo, nil)
 	mockRepo.On("GetUserByProviderID", ctx, domain.AuthProviderGoogle, "google-12345").
 		Return(existingUser, nil)
+	mockFamilyMemberRepo.On("GetFamilyMemberByUserID", ctx, mock.AnythingOfType("uuid.UUID")).Return(&domain.FamilyMember{}, nil)
+	mockTokenGenerator.On("GenerateToken", ctx, mock.AnythingOfType("uuid.UUID"), uuid.Nil, domain.RoleUnknown).Return("jwt-access-token", nil)
 
 	// テスト実行
-	resp, err := usecase.HandleGoogleCallback(ctx, code)
+	isJoined, token, err := usecase.HandleGoogleCallback(ctx, code)
 
 	// 検証
 	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.Equal(t, existingUser.ID, resp.User.ID)
-	assert.Equal(t, existingUser.Email, resp.User.Email)
-	assert.NotEmpty(t, resp.AccessToken)
-
+	require.NotEmpty(t, token)
+	assert.True(t, isJoined) // 既存ユーザーなので家族に参加済み
 	// CreateUserが呼ばれていないことを確認
 	mockRepo.AssertNotCalled(t, "CreateUser")
 	mockProvider.AssertExpectations(t)
 	mockRepo.AssertExpectations(t)
+	mockFamilyMemberRepo.AssertExpectations(t)
+	mockTokenGenerator.AssertExpectations(t)
 }
 
 func TestAuthUsecase_HandleGoogleCallback_EmailAlreadyExists(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
-	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
+	mockFamilyMemberRepo := new(MockFamilyMemberRepo)
+	mockTokenGenerator := new(MockTokenGen)
+	usecase := setupAuthUsecase(t, mockRepo, mockFamilyMemberRepo, mockProvider, mockTokenGenerator)
 
 	ctx := context.Background()
 	code := "test-auth-code"
@@ -307,11 +323,10 @@ func TestAuthUsecase_HandleGoogleCallback_EmailAlreadyExists(t *testing.T) {
 		Return(existingUser, nil)
 
 	// テスト実行
-	resp, err := usecase.HandleGoogleCallback(ctx, code)
+	_, _, err := usecase.HandleGoogleCallback(ctx, code)
 
 	// 検証
 	require.Error(t, err)
-	require.Nil(t, resp)
 
 	var validationErr *pkgerrors.ValidationError
 	assert.ErrorAs(t, err, &validationErr)
@@ -324,7 +339,9 @@ func TestAuthUsecase_HandleGoogleCallback_EmailAlreadyExists(t *testing.T) {
 func TestAuthUsecase_HandleGoogleCallback_ExchangeCodeError(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
-	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
+	mockFamilyMemberRepo := new(MockFamilyMemberRepo)
+	mockTokenGenerator := new(MockTokenGen)
+	usecase := setupAuthUsecase(t, mockRepo, mockFamilyMemberRepo, mockProvider, mockTokenGenerator)
 
 	ctx := context.Background()
 	code := "invalid-code"
@@ -333,11 +350,10 @@ func TestAuthUsecase_HandleGoogleCallback_ExchangeCodeError(t *testing.T) {
 		Return(nil, errors.New("invalid authorization code"))
 
 	// テスト実行
-	resp, err := usecase.HandleGoogleCallback(ctx, code)
+	_, _, err := usecase.HandleGoogleCallback(ctx, code)
 
 	// 検証
 	require.Error(t, err)
-	require.Nil(t, resp)
 
 	var validationErr *pkgerrors.ValidationError
 	assert.ErrorAs(t, err, &validationErr)
@@ -350,7 +366,9 @@ func TestAuthUsecase_HandleGoogleCallback_ExchangeCodeError(t *testing.T) {
 func TestAuthUsecase_HandleGoogleCallback_CreateUserError(t *testing.T) {
 	mockRepo := new(MockUserRepository)
 	mockProvider := new(MockOAuthProvider)
-	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
+	mockFamilyMemberRepo := new(MockFamilyMemberRepo)
+	mockTokenGenerator := new(MockTokenGen)
+	usecase := setupAuthUsecase(t, mockRepo, mockFamilyMemberRepo, mockProvider, mockTokenGenerator)
 
 	ctx := context.Background()
 	code := "test-auth-code"
@@ -371,43 +389,15 @@ func TestAuthUsecase_HandleGoogleCallback_CreateUserError(t *testing.T) {
 		Return(nil, errors.New("database error"))
 
 	// テスト実行
-	resp, err := usecase.HandleGoogleCallback(ctx, code)
+	_, _, err := usecase.HandleGoogleCallback(ctx, code)
 
 	// 検証
 	require.Error(t, err)
-	require.Nil(t, resp)
 
 	var internalErr *pkgerrors.InternalError
 	assert.ErrorAs(t, err, &internalErr)
 
 	mockProvider.AssertExpectations(t)
 	mockRepo.AssertExpectations(t)
-}
-
-func TestAuthUsecase_generateAccessToken(t *testing.T) {
-	mockRepo := new(MockUserRepository)
-	mockProvider := new(MockOAuthProvider)
-	usecase := setupAuthUsecase(t, mockRepo, mockProvider)
-
-	user := &domain.User{
-		ID:         uuid.New(),
-		Email:      "test@example.com",
-		Name:       "Test User",
-		Provider:   domain.AuthProviderGoogle,
-		ProviderID: "google-12345",
-		CreatedAt:  time.Now(),
-		UpdatedAt:  time.Now(),
-	}
-
-	token := usecase.generateAccessToken(user)
-
-	// JWTトークンが生成されていることを確認
-	assert.NotEmpty(t, token)
-
-	// JWT形式（header.payload.signature）であることを確認
-	// JWTは3つの部分に分かれている
-	assert.Contains(t, token, ".")
-
-	// "eyJ"で始まることを確認（Base64エンコードされたJWTヘッダー）
-	assert.True(t, len(token) > 10)
+	mockFamilyMemberRepo.AssertExpectations(t)
 }

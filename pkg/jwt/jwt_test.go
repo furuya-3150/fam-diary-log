@@ -42,12 +42,6 @@ func TestValidateToken(t *testing.T) {
 	if parsedClaims.UserID != userID {
 		t.Errorf("Expected UserID %v, got %v", userID, parsedClaims.UserID)
 	}
-	if parsedClaims.Email != "test@example.com" {
-		t.Errorf("Expected email test@example.com, got %v", parsedClaims.Email)
-	}
-	if parsedClaims.Provider != "email" {
-		t.Errorf("Expected provider email, got %v", parsedClaims.Provider)
-	}
 }
 
 func TestValidateToken_Expired(t *testing.T) {

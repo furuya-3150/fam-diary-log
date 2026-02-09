@@ -109,31 +109,6 @@ func TestDiaryAnalysisUsecaseAnalyzeEmptyContent(t *testing.T) {
 	mockGateway.AssertNotCalled(t, "CheckAccuracy")
 }
 
-// TestDiaryAnalysisUsecaseAnalyzeNLPGatewayNotConfigured tests NLP gateway not configured
-func TestDiaryAnalysisUsecaseAnalyzeNLPGatewayNotConfigured(t *testing.T) {
-	// Arrange
-	mockRepo := new(MockDiaryAnalysisRepository)
-
-	event := &domain.DiaryCreatedEvent{
-		DiaryID:  uuid.New(),
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Content:  "test content",
-	}
-
-	// Create usecase without NLPGateway (nil)
-	usecase := NewDiaryAnalysisUsecase(mockRepo)
-
-	// Act
-	result, err := usecase.Analyze(context.Background(), event)
-
-	// Assert
-	assert.Error(t, err)
-	assert.Nil(t, result)
-	assert.IsType(t, &errors.LogicError{}, err)
-	mockRepo.AssertNotCalled(t, "Create")
-}
-
 // TestDiaryAnalysisUsecaseAnalyzeNLPGatewayError tests NLP gateway error with default score
 func TestDiaryAnalysisUsecaseAnalyzeNLPGatewayError(t *testing.T) {
 	// Arrange

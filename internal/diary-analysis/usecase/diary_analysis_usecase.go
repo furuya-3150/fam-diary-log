@@ -46,12 +46,14 @@ func (dau *diaryAnalysisUsecase) getValueByDateCommon(ctx context.Context, userI
 	// Get week range
 	weekStart, weekEnd := datetime.GetWeekRange(date)
 
+	// slog.Debug("Fetching diary analysis data", "userID", userID, "weekStart", weekStart, "weekEnd", weekEnd, "column", columnName)
+
 	// Create search criteria
 	criteria := &domain.DiaryAnalysisSearchCriteria{
 		UserID:    userID,
 		WeekStart: weekStart,
 		WeekEnd:   weekEnd,
-		Columns:   []string{"DATE(created_at) as date", columnName},
+		Columns:   []string{"DATE(created_at) as created_at", columnName},
 	}
 
 	analysis, err := dau.dar.List(ctx, criteria)
@@ -92,7 +94,7 @@ func (dau *diaryAnalysisUsecase) GetAccuracyScoreByDate(ctx context.Context, use
 
 // GetWritingTimeByDate retrieves writing time for each day of the week containing the specified date
 func (dau *diaryAnalysisUsecase) GetWritingTimeByDate(ctx context.Context, userID uuid.UUID, dateStr string) (map[string]interface{}, error) {
-	return dau.getValueByDateCommon(ctx, userID, dateStr, "write_time_seconds", func(a *domain.DiaryAnalysis) int {
+	return dau.getValueByDateCommon(ctx, userID, dateStr, "writing_time_seconds", func(a *domain.DiaryAnalysis) int {
 		return a.WritingTimeSeconds
 	})
 }

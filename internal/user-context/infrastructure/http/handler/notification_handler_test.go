@@ -11,6 +11,7 @@ import (
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	controller_dto "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/mock"
@@ -44,8 +45,8 @@ func TestNotificationHandler_GetNotificationSetting_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/settings/notifications", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "user_id", userID)
-	ctx = context.WithValue(ctx, "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	mu.On("GetNotificationSetting", mock.Anything, userID, familyID).Return(setting, nil)
@@ -68,7 +69,7 @@ func TestNotificationHandler_GetNotificationSetting_BadRequest_NoUser(t *testing
 	req := httptest.NewRequest(http.MethodGet, "/settings/notifications", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	_ = h.GetNotificationSetting(c)
@@ -85,7 +86,7 @@ func TestNotificationHandler_GetNotificationSetting_BadRequest_NoFamily(t *testi
 	req := httptest.NewRequest(http.MethodGet, "/settings/notifications", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "user_id", userID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
 	c.SetRequest(req.WithContext(ctx))
 
 	_ = h.GetNotificationSetting(c)
@@ -103,8 +104,8 @@ func TestNotificationHandler_GetNotificationSetting_UsecaseError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/settings/notifications", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "user_id", userID)
-	ctx = context.WithValue(ctx, "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	mu.On("GetNotificationSetting", mock.Anything, userID, familyID).Return(nil, errors.New("db err"))
@@ -126,8 +127,8 @@ func TestNotificationHandler_UpdateNotificationSetting_Success(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "user_id", userID)
-	ctx = context.WithValue(ctx, "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	mu.On("UpdateNotificationSetting", mock.Anything, mock.MatchedBy(func(ns *domain.NotificationSetting) bool {
@@ -149,8 +150,8 @@ func TestNotificationHandler_UpdateNotificationSetting_BadRequest_InvalidBody(t 
 	req := httptest.NewRequest(http.MethodPut, "/settings/notifications", bytes.NewReader([]byte("{")))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "user_id", userID)
-	ctx = context.WithValue(ctx, "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	_ = h.UpdateNotificationSetting(c)
@@ -168,7 +169,7 @@ func TestNotificationHandler_UpdateNotificationSetting_BadRequest_NoUser(t *test
 	req := httptest.NewRequest(http.MethodPut, "/settings/notifications", bytes.NewReader(b))
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	_ = h.UpdateNotificationSetting(c)
@@ -188,8 +189,8 @@ func TestNotificationHandler_UpdateNotificationSetting_UsecaseError(t *testing.T
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	ctx := context.WithValue(context.Background(), "user_id", userID)
-	ctx = context.WithValue(ctx, "family_id", familyID)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
 	c.SetRequest(req.WithContext(ctx))
 
 	mu.On("UpdateNotificationSetting", mock.Anything, mock.Anything).Return(errors.New("upsert err"))

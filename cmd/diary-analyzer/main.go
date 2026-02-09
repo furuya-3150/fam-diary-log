@@ -9,6 +9,7 @@ import (
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary-analyzer/infrastructure/broker"
 	analyzerConfig "github.com/furuya-3150/fam-diary-log/internal/diary-analyzer/infrastructure/config"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-analyzer/infrastructure/gateway"
 	"github.com/furuya-3150/fam-diary-log/internal/diary-analyzer/infrastructure/handler"
 	"github.com/furuya-3150/fam-diary-log/internal/diary-analyzer/infrastructure/repository"
 	"github.com/furuya-3150/fam-diary-log/internal/diary-analyzer/usecase"
@@ -61,7 +62,9 @@ func main() {
 	dbManager := db.NewDBManager(config.DB.DatabaseURL)
 	diaryAnalysisRepository := repository.NewDiaryAnalysisRepository(dbManager)
 
-	analyzerUsecase := usecase.NewDiaryAnalysisUsecase(diaryAnalysisRepository)
+	gateway := gateway.NewYahooNLPGateway(config.ThirdParty.YahooNLPAppID)
+
+	analyzerUsecase := usecase.NewDiaryAnalysisUsecase(diaryAnalysisRepository, gateway)
 
 	eventHandler := handler.NewDiaryEventHandler(analyzerUsecase, log)
 

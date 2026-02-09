@@ -25,9 +25,8 @@ func TestGenerateToken_ProducesValidJWT(t *testing.T) {
     userID := uuid.New()
     familyID := uuid.New()
 
-    tokenStr, expires, err := tg.GenerateToken(context.Background(), userID, familyID, domain.RoleMember)
+    tokenStr, err := tg.GenerateToken(context.Background(), userID, familyID, domain.RoleMember)
     require.NoError(t, err)
-    require.Equal(t, int64(3600), expires)
 
     // parse and validate signature
     parsed, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {

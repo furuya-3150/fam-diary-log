@@ -23,12 +23,12 @@ func (m *MockAuthUsecase) InitiateGoogleLogin() (authURL string, state string, e
 	return args.String(0), args.String(1), args.Error(2)
 }
 
-func (m *MockAuthUsecase) HandleGoogleCallback(ctx context.Context, code string) (*domain.AuthResponse, error) {
+func (m *MockAuthUsecase) HandleGoogleCallback(ctx context.Context, code string) (bool, string, error) {
 	args := m.Called(ctx, code)
 	if args.Get(0) == nil {
-		return nil, args.Error(1)
+		return false, "", args.Error(2)
 	}
-	return args.Get(0).(*domain.AuthResponse), args.Error(1)
+	return args.Bool(0), args.String(1), args.Error(2)
 }
 
 func TestAuthController_InitiateGoogleLogin(t *testing.T) {
@@ -95,20 +95,7 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			name: "正常に認証レスポンスを返す",
 			code: "valid-auth-code",
 			setupMock: func(m *MockAuthUsecase, ctx context.Context, code string) {
-				authResp := &domain.AuthResponse{
-					User: &domain.User{
-						ID:         uuid.New(),
-						Email:      "test@example.com",
-						Name:       "Test User",
-						Provider:   domain.AuthProviderGoogle,
-						ProviderID: "google-12345",
-						CreatedAt:  time.Now(),
-						UpdatedAt:  time.Now(),
-					},
-					AccessToken: "jwt-access-token",
-					ExpiresIn:   3600,
-				}
-				m.On("HandleGoogleCallback", ctx, code).Return(authResp, nil)
+				m.On("HandleGoogleCallback", ctx, code).Return(false, "jwt-access-token", nil)
 			},
 			wantErr: false,
 			validate: func(t *testing.T, m *MockAuthUsecase, err error) {
@@ -120,7 +107,7 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			code: "invalid-code",
 			setupMock: func(m *MockAuthUsecase, ctx context.Context, code string) {
 				m.On("HandleGoogleCallback", ctx, code).
-					Return(nil, errors.New("invalid authorization code"))
+					Return(false, "", errors.New("invalid authorization code"))
 			},
 			wantErr: true,
 			validate: func(t *testing.T, m *MockAuthUsecase, err error) {
@@ -132,7 +119,7 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			code: "",
 			setupMock: func(m *MockAuthUsecase, ctx context.Context, code string) {
 				m.On("HandleGoogleCallback", ctx, code).
-					Return(nil, errors.New("code cannot be empty"))
+					Return(false, "", errors.New("code cannot be empty"))
 			},
 			wantErr: true,
 			validate: func(t *testing.T, m *MockAuthUsecase, err error) {
@@ -149,17 +136,16 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 
 			controller := NewAuthController(mockUsecase)
 
-			resp, err := controller.HandleGoogleCallback(ctx, tt.code)
+			isJoined, token, err := controller.HandleGoogleCallback(ctx, tt.code)
 
 			if tt.wantErr {
 				assert.Error(t, err)
-				assert.Nil(t, resp)
+				assert.Equal(t, "", token)
+				assert.Equal(t, false, isJoined)
 			} else {
 				assert.NoError(t, err)
-				require.NotNil(t, resp)
-				assert.NotNil(t, resp.User)
-				assert.NotEmpty(t, resp.AccessToken)
-				assert.Equal(t, int64(3600), resp.ExpiresIn)
+				require.NotEmpty(t, token)
+				assert.Equal(t, false, isJoined)
 			}
 
 			tt.validate(t, mockUsecase, err)
@@ -181,12 +167,10 @@ func TestAuthController_toAuthResponse(t *testing.T) {
 			Email:      "test@example.com",
 			Name:       "Test User",
 			Provider:   domain.AuthProviderGoogle,
-			ProviderID: "google-12345",
 			CreatedAt:  now,
 			UpdatedAt:  now,
 		},
 		AccessToken: "test-access-token",
-		ExpiresIn:   3600,
 	}
 
 	dtoResp := controller.toAuthResponse(domainResp)
@@ -196,8 +180,5 @@ func TestAuthController_toAuthResponse(t *testing.T) {
 	assert.Equal(t, userID, dtoResp.User.ID)
 	assert.Equal(t, "test@example.com", dtoResp.User.Email)
 	assert.Equal(t, "Test User", dtoResp.User.Name)
-	assert.Equal(t, "google", dtoResp.User.Provider)
-	assert.Equal(t, now, dtoResp.User.CreatedAt)
 	assert.Equal(t, "test-access-token", dtoResp.AccessToken)
-	assert.Equal(t, int64(3600), dtoResp.ExpiresIn)
 }

@@ -1,7 +1,10 @@
+-- enable pgcrypto for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 -- family_membersテーブル作成
 CREATE TABLE
   family_members (
-    id BIGSERIAL PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     family_id UUID NOT NULL,
     user_id UUID NOT NULL,
     role INT NOT NULL,

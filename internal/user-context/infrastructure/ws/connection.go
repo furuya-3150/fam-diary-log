@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"log/slog"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -19,9 +20,14 @@ func newConnection(ws *websocket.Conn) *connection {
 }
 
 func (c *connection) reader() {
-	defer func() { c.close() }()
+	slog.Debug("connection reader: started")
+	defer func() {
+		slog.Debug("connection reader: stopping")
+		c.close()
+	}()
 	for {
 		if _, _, err := c.ws.NextReader(); err != nil {
+			slog.Debug("connection reader: NextReader error", "error", err)
 			return
 		}
 		// ignore received messages
@@ -29,16 +35,20 @@ func (c *connection) reader() {
 }
 
 func (c *connection) writer() {
+	slog.Debug("connection writer: started")
 	for b := range c.send {
 		c.mu.Lock()
+		slog.Debug("connection writer: sending message", "message", string(b))
 		_ = c.ws.WriteMessage(websocket.TextMessage, b)
 		c.mu.Unlock()
 	}
+	slog.Debug("connection writer: channel closed, stopping")
 	c.close()
 }
 
 func (c *connection) close() {
 	c.closeOnce.Do(func() {
+		slog.Debug("connection close: closing connection")
 		c.mu.Lock()
 		if c.ws != nil {
 			_ = c.ws.Close()
@@ -48,8 +58,9 @@ func (c *connection) close() {
 		// signal done
 		select {
 		case <-c.done:
-			// already closed
+			slog.Debug("connection close: done already closed")
 		default:
+			slog.Debug("connection close: closing done channel")
 			close(c.done)
 		}
 	})

@@ -1,6 +1,9 @@
+-- enable pgcrypto for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE
   IF NOT EXISTS family_join_requests (
-    id uuid PRIMARY KEY,
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid (),
     family_id uuid NOT NULL,
     user_id uuid NOT NULL,
     status int NOT NULL,

@@ -1,3 +1,6 @@
+-- enable pgcrypto for gen_random_uuid()
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 CREATE TABLE
   IF NOT EXISTS diary_analyses (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),

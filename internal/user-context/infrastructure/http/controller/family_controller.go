@@ -10,11 +10,11 @@ import (
 )
 
 type FamilyController interface {
-	CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error)
+	// CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error)
 	InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error
 	ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) error
 	RespondToJoinRequest(ctx context.Context, req *dto.RespondJoinRequestRequest, userID uuid.UUID) error
-	JoinFamily(ctx context.Context, userID uuid.UUID) (string, int64, error)
+	ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error)
 }
 
 type familyController struct {
@@ -25,18 +25,18 @@ func NewFamilyController(fu usecase.FamilyUsecase) FamilyController {
 	return &familyController{fu: fu}
 }
 
-func (c *familyController) CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error) {
-	family, err := c.fu.CreateFamily(ctx, req.Name, userID)
-	if err != nil {
-		return nil, err
-	}
-	return &dto.FamilyResponse{
-		ID:        family.ID,
-		Name:      family.Name,
-		CreatedAt: family.CreatedAt,
-		UpdatedAt: family.UpdatedAt,
-	}, nil
-}
+// func (c *familyController) CreateFamily(ctx context.Context, req *dto.CreateFamilyRequest, userID uuid.UUID) (*dto.FamilyResponse, error) {
+// 	token, expired, err := c.fu.CreateFamily(ctx, req.Name, userID)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	return &dto.FamilyResponse{
+// 		ID:        family.ID,
+// 		Name:      family.Name,
+// 		CreatedAt: family.CreatedAt,
+// 		UpdatedAt: family.UpdatedAt,
+// 	}, nil
+// }
 
 func (c *familyController) InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error {
 	in := usecase.InviteMembersInput{
@@ -62,6 +62,6 @@ func (c *familyController) RespondToJoinRequest(ctx context.Context, req *dto.Re
 	return c.fu.RespondToJoinRequest(ctx, req.ID, status, userID)
 }
 
-func (c *familyController) JoinFamily(ctx context.Context, userID uuid.UUID) (string, int64, error) {
-	return c.fu.JoinFamilyIfApproved(ctx, userID)
+func (c *familyController) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
+	return c.fu.ActivateFamilyContext(ctx, userID, familyID)
 }

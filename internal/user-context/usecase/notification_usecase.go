@@ -28,7 +28,7 @@ func (u *notificationUsecase) GetNotificationSetting(ctx context.Context, userID
 	}
 	if s == nil {
 		// default setting
-		return &domain.NotificationSetting{UserID: userID, FamilyID: familyID, PostCreatedEnabled: true}, nil
+		return &domain.NotificationSetting{UserID: userID, FamilyID: familyID, PostCreatedEnabled: false}, nil
 	}
 	return s, nil
 }

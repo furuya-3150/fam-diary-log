@@ -7,7 +7,7 @@ import (
 )
 
 type Family struct {
-	ID        uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	Name      string    `gorm:"type:varchar(255);not null"`
 	CreatedAt time.Time `gorm:"not null"`
 	UpdatedAt time.Time `gorm:"not null"`
@@ -33,7 +33,7 @@ func (r Role) String() string {
 }
 
 type FamilyMember struct {
-	ID        int64     `gorm:"primaryKey;autoIncrement"`
+	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	FamilyID  uuid.UUID `gorm:"type:uuid;not null;index"`
 	UserID    uuid.UUID `gorm:"type:uuid;not null;index"`
 	Role      Role      `gorm:"type:int;not null"`
@@ -42,7 +42,7 @@ type FamilyMember struct {
 }
 
 type FamilyInvitation struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	FamilyID        uuid.UUID  `gorm:"type:uuid;not null;index"`
 	InviterUserID   uuid.UUID  `gorm:"type:uuid;not null"`
 	InvitationToken string     `gorm:"type:varchar(255);not null;uniqueIndex"`
@@ -52,7 +52,7 @@ type FamilyInvitation struct {
 }
 
 type FamilyJoinRequest struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey"`
+	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	FamilyID        uuid.UUID  `gorm:"type:uuid;not null;index"`
 	UserID          uuid.UUID  `gorm:"type:uuid;not null;index"`
 	Status          JoinRequestStatus `gorm:"type:int;not null"`

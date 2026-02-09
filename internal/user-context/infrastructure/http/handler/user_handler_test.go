@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	controller_dto "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/mock"
@@ -30,7 +31,7 @@ func (m *MockUserController) EditProfile(ctx context.Context, req *controller_dt
 	return args.Get(0).(*controller_dto.UserResponse), args.Error(1)
 }
 
-func (m *MockUserController) GetProfile(ctx context.Context, userID string) (*controller_dto.UserResponse, error) {
+func (m *MockUserController) GetProfile(ctx context.Context, userID uuid.UUID) (*controller_dto.UserResponse, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -44,7 +45,7 @@ func TestUserHandler_EditProfile_Success(t *testing.T) {
 	h := &userHandler{userController: mockController}
 
 	reqBody := &controller_dto.EditUserRequest{
-		ID:    controller_dto.EditUserRequest{}.ID,
+		ID:    uuid.Nil,
 		Name:  "Alice",
 		Email: "alice@example.com",
 	}
@@ -53,6 +54,9 @@ func TestUserHandler_EditProfile_Success(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyFamilyID, uuid.New())
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, uuid.New())
+	c.SetRequest(req.WithContext(ctx))
 
 	expected := &controller_dto.UserResponse{
 		ID:    reqBody.ID,
@@ -113,6 +117,9 @@ func TestUserHandler_EditProfile_ControllerError(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	ctx := context.WithValue(context.Background(), auth.ContextKeyFamilyID, uuid.New())
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, uuid.New())
+	c.SetRequest(req.WithContext(ctx))
 
 	mockController.On("EditProfile", mock.Anything, mock.Anything).Return(nil, errors.New("controller error"))
 
@@ -133,15 +140,15 @@ func TestUserHandler_GetProfile_Success(t *testing.T) {
 	mockController := new(MockUserController)
 	h := &userHandler{userController: mockController}
 
-	userID := "123e4567-e89b-12d3-a456-426614174000"
+	userID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/users/me", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	// contextにuser_idをセット
-	c.SetRequest(req.WithContext(context.WithValue(req.Context(), "user_id", userID)))
+	c.SetRequest(req.WithContext(context.WithValue(req.Context(), auth.ContextKeyUserID, userID)))
 
 	expected := &controller_dto.UserResponse{
-		ID:    uuid.MustParse(userID),
+		ID:    userID,
 		Email: "test@example.com",
 	}
 	mockController.On("GetProfile", mock.Anything, userID).Return(expected, nil)
@@ -184,11 +191,11 @@ func TestUserHandler_GetProfile_ControllerError(t *testing.T) {
 	mockController := new(MockUserController)
 	h := &userHandler{userController: mockController}
 
-	userID := "123e4567-e89b-12d3-a456-426614174000"
+	userID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/users/me", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetRequest(req.WithContext(context.WithValue(req.Context(), "user_id", userID)))
+	c.SetRequest(req.WithContext(context.WithValue(req.Context(), auth.ContextKeyUserID, userID)))
 
 	mockController.On("GetProfile", mock.Anything, userID).Return(nil, errors.New("controller error"))
 
