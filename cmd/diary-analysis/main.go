@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/config"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http"
+	"github.com/furuya-3150/fam-diary-log/internal/diary-analysis/infrastructure/http"
 	"github.com/furuya-3150/fam-diary-log/pkg/logger"
 	"github.com/joho/godotenv"
 )
