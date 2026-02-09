@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 
 	"github.com/google/uuid"
 )
@@ -45,6 +46,7 @@ func (h *Hub) Run() {
 	for {
 		select {
 		case s := <-h.register:
+			slog.Debug("Hub Run: registering connection", "user_id", s.userID)
 			conns := h.clients[s.userID]
 			if conns == nil {
 				conns = make(map[*connection]struct{})
@@ -52,6 +54,7 @@ func (h *Hub) Run() {
 			}
 			h.clients[s.userID][s.conn] = struct{}{}
 		case s := <-h.unregister:
+			slog.Debug("Hub Run: unregistering connection", "user_id", s.userID)
 			if conns, ok := h.clients[s.userID]; ok {
 				delete(conns, s.conn)
 				s.conn.close()
@@ -60,6 +63,7 @@ func (h *Hub) Run() {
 				}
 			}
 		case m := <-h.broadcast:
+			slog.Debug("Hub Run: broadcasting message", "user_id", m.userID, "payload", string(m.payload))
 			if conns, ok := h.clients[m.userID]; ok {
 				for c := range conns {
 					select {
@@ -71,6 +75,7 @@ func (h *Hub) Run() {
 				}
 			}
 		case uid := <-h.closeUser:
+			slog.Debug("Hub Run: closing all connections for user", "user_id", uid)
 			if conns, ok := h.clients[uid]; ok {
 				for c := range conns {
 					c.close()
