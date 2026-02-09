@@ -2,6 +2,7 @@ package jwt
 
 import (
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -15,6 +16,7 @@ type Claims struct {
 	Name      string    `json:"name"`
 	Provider  string    `json:"provider"`
 	FamilyID  uuid.UUID `json:"family_id"`
+	Role      string    `json:"role"`
 	IssuedAt  time.Time `json:"iat"`
 	ExpiresAt time.Time `json:"exp"`
 	Issuer    string    `json:"iss"`
@@ -26,28 +28,33 @@ func ValidateToken(tokenString, secret string) (*Claims, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		// Verify signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			slog.Debug("Unexpected signing method", "alg", token.Header["alg"])
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(secret), nil
 	})
 
 	if err != nil {
+		slog.Debug("Failed to parse token", "error", err)
 		return nil, fmt.Errorf("failed to parse token: %w", err)
 	}
 
 	// Verify token is valid
 	if !token.Valid {
+		slog.Debug("Invalid token")
 		return nil, fmt.Errorf("invalid token")
 	}
 
 	// Extract and validate claims
 	claims, err := ParseClaims(token)
 	if err != nil {
+		slog.Debug("Failed to parse token", "error", err)
 		return nil, err
 	}
 
 	// Check expiration
 	if claims.ExpiresAt.Before(time.Now()) {
+		slog.Debug("Token expired", "exp", claims.ExpiresAt)
 		return nil, fmt.Errorf("token expired")
 	}
 
@@ -58,43 +65,36 @@ func ValidateToken(tokenString, secret string) (*Claims, error) {
 func ParseClaims(token *jwt.Token) (*Claims, error) {
 	mapClaims, ok := token.Claims.(jwt.MapClaims)
 	if !ok {
+		slog.Debug("Invalid claims format")
 		return nil, fmt.Errorf("invalid claims format")
 	}
+	slog.Debug("Parsed claims", "claims", mapClaims)
 
 	// Parse UserID
 	subStr, ok := mapClaims["sub"].(string)
 	if !ok {
+		slog.Debug("Invalid or missing 'sub' claim")
 		return nil, fmt.Errorf("invalid or missing 'sub' claim")
 	}
 	userID, err := uuid.Parse(subStr)
 	if err != nil {
+		slog.Debug("Invalid user ID format", "error", err)
 		return nil, fmt.Errorf("invalid user ID format: %w", err)
 	}
 
 	// Parse FamilyID
 	familyIDStr, ok := mapClaims["family_id"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid or missing 'family_id' claim")
-	}
-	familyID, err := uuid.Parse(familyIDStr)
-	if err != nil {
-		return nil, fmt.Errorf("invalid family ID format: %w", err)
-	}
-
-	// Parse email
-	email, ok := mapClaims["email"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid or missing 'email' claim")
+	familyID := uuid.Nil
+	if ok {
+		familyID, err = uuid.Parse(familyIDStr)
+		if err != nil {
+			slog.Debug("Invalid family ID format", "error", err)
+			return nil, fmt.Errorf("invalid family ID format: %w", err)
+		}
 	}
 
-	// Parse name (optional)
-	name, _ := mapClaims["name"].(string)
-
-	// Parse provider
-	provider, ok := mapClaims["provider"].(string)
-	if !ok {
-		return nil, fmt.Errorf("invalid or missing 'provider' claim")
-	}
+	// Parse role (optional)
+	role, _ := mapClaims["role"].(string)
 
 	// Parse issuer (optional)
 	issuer, _ := mapClaims["iss"].(string)
@@ -102,20 +102,23 @@ func ParseClaims(token *jwt.Token) (*Claims, error) {
 	// Parse timestamps
 	iat, err := parseTimestamp(mapClaims["iat"])
 	if err != nil {
+		slog.Debug("Invalid 'iat' claim", "error", err)
 		return nil, fmt.Errorf("invalid 'iat' claim: %w", err)
 	}
 
 	exp, err := parseTimestamp(mapClaims["exp"])
 	if err != nil {
+		slog.Debug("Invalid 'exp' claim", "error", err)
 		return nil, fmt.Errorf("invalid 'exp' claim: %w", err)
 	}
 
 	return &Claims{
-		UserID:    userID,
-		Email:     email,
-		Name:      name,
-		Provider:  provider,
+		UserID: userID,
+		// Email:     email,
+		// Name:      name,
+		// Provider:  provider,
 		FamilyID:  familyID,
+		Role:      role,
 		IssuedAt:  iat,
 		ExpiresAt: exp,
 		Issuer:    issuer,
@@ -142,4 +145,10 @@ func GetUserID(tokenString, secret string) (uuid.UUID, error) {
 		return uuid.Nil, err
 	}
 	return claims.UserID, nil
+}
+
+// ValidateAndGetClaims validates a JWT token and returns the full claims
+// This is the primary function to use for authentication
+func ValidateAndGetClaims(tokenString, secret string) (*Claims, error) {
+	return ValidateToken(tokenString, secret)
 }
