@@ -15,7 +15,7 @@ const (
 
 // User represents a user in the system
 type User struct {
-	ID         uuid.UUID    `json:"id" gorm:"type:uuid;primaryKey"`
+	ID         uuid.UUID    `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid();"`
 	Email      string       `json:"email" gorm:"type:varchar(255);uniqueIndex;not null"`
 	Name       string       `json:"name" gorm:"type:varchar(255);not null"`
 	Provider   AuthProvider `json:"provider" gorm:"type:varchar(50);not null;uniqueIndex:idx_provider_id"`
@@ -31,7 +31,6 @@ func (User) TableName() string {
 
 // AuthResponse represents authentication response
 type AuthResponse struct {
-	User        *User  `json:"user"`
-	AccessToken string `json:"access_token"`
-	ExpiresIn   int64  `json:"expires_in"`
+	User        *User      `json:"user"`
+	AccessToken string     `json:"access_token"`
 }

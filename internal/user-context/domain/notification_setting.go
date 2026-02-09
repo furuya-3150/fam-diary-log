@@ -7,7 +7,7 @@ import (
 )
 
 type NotificationSetting struct {
-	ID                 uuid.UUID `gorm:"type:uuid;primaryKey"`
+	ID                 uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid();"`
 	UserID             uuid.UUID `gorm:"type:uuid;not null"`
 	FamilyID           uuid.UUID `gorm:"type:uuid;not null"`
 	PostCreatedEnabled bool      `gorm:"not null;default:true"`
