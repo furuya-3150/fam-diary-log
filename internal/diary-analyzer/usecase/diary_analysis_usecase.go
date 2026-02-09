@@ -24,10 +24,13 @@ type diaryAnalysisUsecase struct {
 	nlpGateway gateway.NLPGateway
 }
 
-func NewDiaryAnalysisUsecase(ar repository.DiaryAnalysisRepository) DiaryAnalysisUsecase {
+func NewDiaryAnalysisUsecase(
+	ar repository.DiaryAnalysisRepository,
+	nlpGateway gateway.NLPGateway,
+) DiaryAnalysisUsecase {
 	return &diaryAnalysisUsecase{
 		ar:         ar,
-		nlpGateway: nil,
+		nlpGateway: nlpGateway,
 	}
 }
 
