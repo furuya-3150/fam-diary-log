@@ -32,7 +32,7 @@ func TestE2E_CreateDiary_Success(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(createRequest)
-	req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add auth context
@@ -85,7 +85,7 @@ func TestE2E_CreateDiary_ValidationError(t *testing.T) {
 	}
 
 	body, _ := json.Marshal(createRequest)
-	req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	ctx := req.Context()
@@ -135,7 +135,7 @@ func TestE2E_CreateDiary_MultipleDiaries(t *testing.T) {
 
 	for _, diary := range diaries {
 		body, _ := json.Marshal(diary)
-		req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader(body))
+		req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
 
 		ctx := req.Context()
@@ -157,7 +157,7 @@ func TestE2E_Healthz(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping E2E test")
 	}
-	
+
 	t.Parallel()
 
 	godotenv.Load("../../../../cmd/diary-api/.env")

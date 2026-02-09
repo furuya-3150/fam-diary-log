@@ -70,8 +70,14 @@ func (dh *DiaryHandler) List(e echo.Context) error {
 
 func (dh *DiaryHandler) GetCount(e echo.Context) error {
 	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
-	yearStr := e.Param("year")
-	monthStr := e.Param("month")
+	yearStr := e.QueryParam("year")
+	monthStr := e.QueryParam("month")
+
+	// Validate required query parameters
+	if yearStr == "" || monthStr == "" {
+		validationErr := &errors.ValidationError{Message: "year and month query parameters are required"}
+		return errors.RespondWithError(e, validationErr)
+	}
 
 	count, err := dh.dc.GetCount(e.Request().Context(), familyID, yearStr, monthStr)
 	if err != nil {

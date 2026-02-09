@@ -83,7 +83,7 @@ func TestDiaryHandler_Create_Success(t *testing.T) {
 
 	// Create request
 	body, _ := json.Marshal(requestBody)
-	req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
@@ -142,7 +142,7 @@ func TestDiaryHandler_Create_ValidationError(t *testing.T) {
 
 	// Create request
 	body, _ := json.Marshal(requestBody)
-	req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
@@ -198,7 +198,7 @@ func TestDiaryHandler_Create_InternalError(t *testing.T) {
 
 	// Create request
 	body, _ := json.Marshal(requestBody)
-	req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader(body))
+	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
@@ -245,7 +245,7 @@ func TestDiaryHandler_Create_BindError(t *testing.T) {
 	userID := uuid.New()
 
 	// Send invalid JSON
-	req := httptest.NewRequest(http.MethodPost, "/diaries", bytes.NewReader([]byte("invalid json")))
+	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
@@ -320,7 +320,7 @@ func TestDiaryHandler_List_Success(t *testing.T) {
 	}), familyID, mock.Anything).Return(expectedResponses, nil)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=2026-01-01", nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries?target_date=2026-01-01", nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
@@ -368,7 +368,7 @@ func TestDiaryHandler_List_Error(t *testing.T) {
 	mockController.On("List", mock.Anything, familyID, mock.Anything).Return(nil, internalErr)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=2026-01-01", nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries?target_date=2026-01-01", nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
@@ -403,7 +403,7 @@ func TestDiaryHandler_List_MissingTargetDate(t *testing.T) {
 	// No expectation for List: it should not be called
 
 	// Create request without target_date
-	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries", nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
@@ -440,7 +440,7 @@ func TestDiaryHandler_List_InvalidTargetDate(t *testing.T) {
 	familyID := uuid.New()
 
 	// Create request with invalid target_date
-	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=invalid-date", nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries?target_date=invalid-date", nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
@@ -479,7 +479,7 @@ func TestDiaryHandler_GetCount_Success(t *testing.T) {
 	mockController.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
 
 	// Create HTTP request
-	req := httptest.NewRequest("GET", "/diaries/count/2026/01", nil)
+	req := httptest.NewRequest("GET", "/families/me/diaries/count?year=2026&month=01", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	req = req.WithContext(ctx)
 
@@ -489,8 +489,6 @@ func TestDiaryHandler_GetCount_Success(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("year", "month")
-	c.SetParamValues("2026", "01")
 
 	// Call handler
 	err := handler.GetCount(c)
@@ -518,7 +516,7 @@ func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
 	mockController.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
 
 	// Create HTTP request
-	req := httptest.NewRequest("GET", "/diaries/count/2026/13", nil)
+	req := httptest.NewRequest("GET", "/families/me/diaries/count?year=2026&month=13", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	req = req.WithContext(ctx)
 
@@ -528,8 +526,6 @@ func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("year", "month")
-	c.SetParamValues("2026", "13")
 
 	// Call handler
 	err := handler.GetCount(c)
@@ -538,6 +534,55 @@ func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
 	}
 
 	mockController.AssertExpectations(t)
+}
+
+// TestDiaryHandler_GetCount_MissingParams tests missing query parameters
+func TestDiaryHandler_GetCount_MissingParams(t *testing.T) {
+	t.Parallel()
+
+	mockController := new(MockDiaryController)
+	handler := NewDiaryHandler(mockController)
+
+	familyID := uuid.New()
+
+	testCases := []struct {
+		name string
+		url  string
+	}{
+		{"missing year", "/families/me/diaries/count?month=01"},
+		{"missing month", "/families/me/diaries/count?year=2026"},
+		{"missing both", "/families/me/diaries/count"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create HTTP request
+			req := httptest.NewRequest("GET", tc.url, nil)
+			ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+			req = req.WithContext(ctx)
+
+			// Create response writer
+			rec := httptest.NewRecorder()
+
+			// Create Echo context
+			e := echo.New()
+			c := e.NewContext(req, rec)
+
+			// Call handler
+			err := handler.GetCount(c)
+			if err != nil {
+				t.Logf("expected error: %v", err)
+			}
+
+			// Should return 400 Bad Request
+			if rec.Code != http.StatusBadRequest {
+				t.Errorf("expected status %d, got %d", http.StatusBadRequest, rec.Code)
+			}
+		})
+	}
+
+	// Controller should never be called
+	mockController.AssertNotCalled(t, "GetCount")
 }
 
 // ============================================
@@ -566,7 +611,7 @@ func TestDiaryHandler_GetStreak_Success(t *testing.T) {
 	}), userID, familyID).Return(expectedResponse, nil)
 
 	// Create HTTP request
-	req := httptest.NewRequest("GET", "/diaries/streak", nil)
+	req := httptest.NewRequest("GET", "/families/me/diaries/streak", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
@@ -617,7 +662,7 @@ func TestDiaryHandler_GetStreak_ControllerError(t *testing.T) {
 	mockController.On("GetStreak", mock.Anything, userID, familyID).Return(nil, controllerErr)
 
 	// Create HTTP request
-	req := httptest.NewRequest("GET", "/diaries/streak", nil)
+	req := httptest.NewRequest("GET", "/families/me/diaries/streak", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)

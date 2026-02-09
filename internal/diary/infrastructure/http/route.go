@@ -37,15 +37,13 @@ func NewRouter() *echo.Echo {
 		return c.String(http.StatusOK, "Hello, World!")
 	})
 
-	// diary
-	diary := e.Group("/diaries")
-	diary.Use(auth.JWTAuthMiddleware(config.JWT.Secret, auth.FamilyCookieName))
-	diary.POST("", diaryHandler.Create)
-	diary.GET("", diaryHandler.List)
-	diary.GET("/count/:year/:month", diaryHandler.GetCount)
-
-	// streak
-	diary.GET("/streak", diaryHandler.GetStreak)
+	// family diaries - authenticated user's family context
+	diaries := e.Group("/families/me/diaries")
+	diaries.Use(auth.JWTAuthMiddleware(config.JWT.Secret, auth.FamilyCookieName))
+	diaries.POST("", diaryHandler.Create)
+	diaries.GET("", diaryHandler.List)
+	diaries.GET("/count", diaryHandler.GetCount)
+	diaries.GET("/streak", diaryHandler.GetStreak)
 
 	return e
 }
