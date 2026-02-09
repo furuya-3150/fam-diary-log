@@ -14,7 +14,7 @@ type FamilyController interface {
 	InviteMembers(ctx context.Context, req *dto.InviteMembersRequest) error
 	ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) error
 	RespondToJoinRequest(ctx context.Context, req *dto.RespondJoinRequestRequest, userID uuid.UUID) error
-	JoinFamily(ctx context.Context, userID uuid.UUID) (string, error)
+	ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error)
 }
 
 type familyController struct {
@@ -62,6 +62,6 @@ func (c *familyController) RespondToJoinRequest(ctx context.Context, req *dto.Re
 	return c.fu.RespondToJoinRequest(ctx, req.ID, status, userID)
 }
 
-func (c *familyController) JoinFamily(ctx context.Context, userID uuid.UUID) (string, error) {
-	return c.fu.JoinFamilyIfApproved(ctx, userID)
+func (c *familyController) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
+	return c.fu.ActivateFamilyContext(ctx, userID, familyID)
 }

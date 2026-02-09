@@ -29,7 +29,7 @@ type FamilyUsecase interface {
 	InviteMembers(ctx context.Context, in InviteMembersInput) error
 	ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error
 	RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error
-	JoinFamilyIfApproved(ctx context.Context, userID uuid.UUID) (string, error)
+	ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error)
 }
 
 type familyUsecase struct {
@@ -274,6 +274,25 @@ func (fu *familyUsecase) RespondToJoinRequest(ctx context.Context, requestID uui
 		return err
 	}
 
+	// 承認時はメンバーを追加
+	if status == domain.JoinRequestStatusApproved {
+		// すでにメンバーか確認
+		already, err := fu.fmr.IsUserAlreadyMember(ctx, jr.UserID)
+		if err != nil {
+			return err
+		}
+		if !already {
+			member := &domain.FamilyMember{
+				FamilyID: jr.FamilyID,
+				UserID:   jr.UserID,
+				Role:     domain.RoleMember,
+			}
+			if err := fu.fmr.AddFamilyMember(ctx, member); err != nil {
+				return err
+			}
+		}
+	}
+
 	payload := map[string]interface{}{
 		"type":       ws.PayloadTypeJoinRequestResponse,
 		"status":     int(status),
@@ -288,8 +307,11 @@ func (fu *familyUsecase) RespondToJoinRequest(ctx context.Context, requestID uui
 	return nil
 }
 
-func (fu *familyUsecase) JoinFamilyIfApproved(ctx context.Context, userID uuid.UUID) (string, error) {
-	// find approved join request for this user
+// ActivateFamilyContext sets the family context by issuing a JWT cookie for the specified family.
+// This should be called after a user's join request has been approved.
+// It verifies the user is a member of the specified family before issuing the token.
+func (fu *familyUsecase) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
+	// find approved join request for this user and family
 	jr, err := fu.fjr.FindApprovedByUser(ctx, userID)
 	if err != nil {
 		return "", err
@@ -297,25 +319,21 @@ func (fu *familyUsecase) JoinFamilyIfApproved(ctx context.Context, userID uuid.U
 	if jr == nil {
 		return "", &errors.NotFoundError{Message: "approved join request not found"}
 	}
+	// 指定されたfamilyIDと一致するか確認
+	if jr.FamilyID != familyID {
+		return "", &errors.BadRequestError{Message: "family_id mismatch"}
+	}
 
-	// check already member
-	already, err := fu.fmr.IsUserAlreadyMember(ctx, userID)
+	// メンバーであることを確認（RespondToJoinRequestで追加済みのはず）
+	isMember, err := fu.fmr.IsUserAlreadyMember(ctx, userID)
 	if err != nil {
 		return "", err
 	}
-	if already {
-		return "", &errors.ValidationError{Message: "you are already a member of a family"}
+	if !isMember {
+		return "", &errors.ValidationError{Message: "user is not a member of the family"}
 	}
 
-	member := &domain.FamilyMember{
-		FamilyID: jr.FamilyID,
-		UserID:   userID,
-		Role:     domain.RoleMember,
-	}
-	if err := fu.fmr.AddFamilyMember(ctx, member); err != nil {
-		return "", err
-	}
-
+	// トークンを生成してCookieに設定
 	signed, err := fu.tg.GenerateToken(ctx, userID, jr.FamilyID, domain.RoleMember)
 	if err != nil {
 		return "", err

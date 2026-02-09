@@ -28,7 +28,7 @@ func (m *MockFamilyUsecase) CreateFamily(ctx context.Context, name string, userI
 func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.InviteMembersInput) error {
 	args := m.Called(ctx, in)
 	return args.Error(0)
-}	
+}
 
 func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error {
 	args := m.Called(ctx, token, userID)
@@ -36,12 +36,12 @@ func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, use
 }
 
 func (m *MockFamilyUsecase) RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error {
-    args := m.Called(ctx, requestID, status, responderUserID)
-    return args.Error(0)
+	args := m.Called(ctx, requestID, status, responderUserID)
+	return args.Error(0)
 }
 
-func (m *MockFamilyUsecase) JoinFamilyIfApproved(ctx context.Context, userID uuid.UUID) (string, error) {
-	args := m.Called(ctx, userID)
+func (m *MockFamilyUsecase) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
+	args := m.Called(ctx, userID, familyID)
 	if args.Get(0) == nil {
 		return "", args.Error(1)
 	}
@@ -85,32 +85,32 @@ func (m *MockFamilyUsecase) JoinFamilyIfApproved(ctx context.Context, userID uui
 // }
 
 func TestFamilyController_RespondToJoinRequest_Success(t *testing.T) {
-    mockUC := new(MockFamilyUsecase)
-    ctrl := NewFamilyController(mockUC)
+	mockUC := new(MockFamilyUsecase)
+	ctrl := NewFamilyController(mockUC)
 
-    ctx := context.Background()
-    reqID := uuid.New()
-    userID := uuid.New()
+	ctx := context.Background()
+	reqID := uuid.New()
+	userID := uuid.New()
 
-    mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusApproved, userID).Return(nil)
+	mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusApproved, userID).Return(nil)
 
-    req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusApproved)}
-    err := ctrl.RespondToJoinRequest(ctx, req, userID)
-    require.NoError(t, err)
-    mockUC.AssertExpectations(t)
+	req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusApproved)}
+	err := ctrl.RespondToJoinRequest(ctx, req, userID)
+	require.NoError(t, err)
+	mockUC.AssertExpectations(t)
 }
 
 func TestFamilyController_RespondToJoinRequest_ErrorPropagate(t *testing.T) {
-    mockUC := new(MockFamilyUsecase)
-    ctrl := NewFamilyController(mockUC)
+	mockUC := new(MockFamilyUsecase)
+	ctrl := NewFamilyController(mockUC)
 
-    ctx := context.Background()
-    reqID := uuid.New()
-    userID := uuid.New()
+	ctx := context.Background()
+	reqID := uuid.New()
+	userID := uuid.New()
 
-    mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusRejected, userID).Return(errors.New("usecase err"))
+	mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusRejected, userID).Return(errors.New("usecase err"))
 
-    req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusRejected)}
-    err := ctrl.RespondToJoinRequest(ctx, req, userID)
-    require.Error(t, err)
+	req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusRejected)}
+	err := ctrl.RespondToJoinRequest(ctx, req, userID)
+	require.Error(t, err)
 }

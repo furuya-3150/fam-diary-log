@@ -15,10 +15,10 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
+	middAuth "github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
-	middAuth "github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 )
 
 func NewRouter() *echo.Echo {
@@ -53,8 +53,6 @@ func NewRouter() *echo.Echo {
 	userController := controller.NewUserController(userUsecase)
 	userHandler := handler.NewUserHandler(userController)
 
-
-
 	// mail broker publisher
 	pub := broker.NewDiaryMailerPublisher(slog.Default())
 
@@ -63,7 +61,7 @@ func NewRouter() *echo.Echo {
 	// Run the hub
 	go hub.Run()
 	wsHandler := ws.NewWSHandler(hub)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, authRepo,txManager, &clock.Real{}, tokenGenerator, hub, pub)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, authRepo, txManager, &clock.Real{}, tokenGenerator, hub, pub)
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController, familyUsecase)
 
@@ -103,19 +101,19 @@ func NewRouter() *echo.Echo {
 	// Family routes
 	families := e.Group("/families")
 	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
-	families.POST("/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
-	families.POST("/apply", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
-	families.POST("/respond", familyHandler.RespondToJoinRequest, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
-	families.POST("/join", familyHandler.JoinFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
+	families.POST("/me/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	families.POST("/join-requests", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
+	families.PATCH("/me/join-requests/:id", familyHandler.RespondToJoinRequest, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	families.POST("/:family_id/activate", familyHandler.ActivateFamilyContext, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
 
 	// WebSocket route
 	e.GET("/ws", wsHandler.Handle, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
 
 	// Notification settings routes
-	settings := e.Group("/settings")
-	settings.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
-	settings.PUT("/notifications", notificationHandler.UpdateNotificationSetting)
-	settings.GET("/notifications", notificationHandler.GetNotificationSetting)
+	notifications := e.Group("/families/me/settings")
+	notifications.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	notifications.PUT("/notifications", notificationHandler.UpdateNotificationSetting)
+	notifications.GET("/notifications", notificationHandler.GetNotificationSetting)
 
 	return e
 }

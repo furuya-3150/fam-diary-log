@@ -177,7 +177,7 @@ func newTestEnv() (context.Context,
 	tg := new(MockTokenGen)
 	wsp := new(MockWSPblisher)
 	mp := new(MockMailPublisher)
-		
+
 	u := NewFamilyUsecase(fr, fmr, fir, tjr, ur, tm, &clock.Fixed{}, tg, wsp, mp)
 	ctx := context.Background()
 
@@ -452,6 +452,12 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 			return false
 		}
 		return true
+	})).Return(nil)
+
+	// 承認時にメンバー追加
+	fmr.On("IsUserAlreadyMember", mock.Anything, requestUserID).Return(false, nil)
+	fmr.On("AddFamilyMember", mock.Anything, mock.MatchedBy(func(member *domain.FamilyMember) bool {
+		return member.UserID == requestUserID && member.FamilyID == familyID && member.Role == domain.RoleMember
 	})).Return(nil)
 
 	wsp.On("Publish", mock.Anything, requestUserID, mock.Anything).Return(nil)
