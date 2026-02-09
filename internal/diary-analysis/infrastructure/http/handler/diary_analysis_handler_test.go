@@ -62,7 +62,7 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_Success(t *testing.T) {
 	})).Return(expectedCount, nil)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/week-char-count/"+date, nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-char-count?date="+date, nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
@@ -74,8 +74,6 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_Success(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("date")
-	c.SetParamValues(date)
 
 	// Call handler
 	err := handler.GetWeekCharCount(c)
@@ -105,14 +103,12 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_MissingUserID(t *testing.T) {
 	date := "2026-01-20"
 
 	// Create request without userID in context
-	req := httptest.NewRequest(http.MethodGet, "/week-char-count/"+date, nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-char-count?date="+date, nil)
 	rec := httptest.NewRecorder()
 
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("date")
-	c.SetParamValues(date)
 
 	// Call handler
 	err := handler.GetWeekCharCount(c)
@@ -144,7 +140,7 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_InvalidDate(t *testing.T) {
 	mockUsecase.On("GetCharCountByDate", mock.Anything, userID, invalidDate).Return(map[string]interface{}{}, &errors.ValidationError{Message: "invalid date format"})
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/week-char-count/"+invalidDate, nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-char-count?date="+invalidDate, nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
@@ -156,8 +152,6 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_InvalidDate(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("date")
-	c.SetParamValues(invalidDate)
 
 	// Call handler
 	err := handler.GetWeekCharCount(c)
@@ -175,6 +169,47 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_InvalidDate(t *testing.T) {
 
 	// Verify mock was called
 	mockUsecase.AssertCalled(t, "GetCharCountByDate", mock.Anything, userID, invalidDate)
+}
+
+// GetWeekCharCount with missing date parameter
+func TestDiaryAnalysisHandler_GetWeekCharCount_MissingDate(t *testing.T) {
+	t.Parallel()
+
+	mockUsecase := new(MockDiaryAnalysisUsecase)
+	handler := NewDiaryAnalysisHandler(mockUsecase)
+
+	userID := uuid.New()
+
+	// Create request without date parameter
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-char-count", nil)
+
+	// Set context values
+	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
+	req = req.WithContext(ctx)
+
+	// Create response writer
+	rec := httptest.NewRecorder()
+
+	// Create Echo context
+	e := echo.New()
+	c := e.NewContext(req, rec)
+
+	// Call handler
+	err := handler.GetWeekCharCount(c)
+	// Handler returns nil, Echoが処理している
+
+	// Verify response status code
+	assert.NotEqual(t, http.StatusOK, rec.Code, "expected error status code")
+
+	// Verify response body contains error message
+	var errorResponse map[string]interface{}
+	err = json.Unmarshal(rec.Body.Bytes(), &errorResponse)
+	assert.NoError(t, err, "failed to unmarshal error response")
+	assert.Equal(t, "VALIDATION_ERROR", errorResponse["code"])
+	assert.Equal(t, "date query parameter is required", errorResponse["message"])
+
+	// Verify mock was NOT called
+	mockUsecase.AssertNotCalled(t, "GetCharCountByDate")
 }
 
 // GetWeekSentenceCount with valid user ID and date - success
@@ -200,7 +235,7 @@ func TestDiaryAnalysisHandler_GetWeekSentenceCount_Success(t *testing.T) {
 	})).Return(expectedCount, nil)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/week-sentence-count/"+date, nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-sentence-count?date="+date, nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
@@ -212,8 +247,6 @@ func TestDiaryAnalysisHandler_GetWeekSentenceCount_Success(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("date")
-	c.SetParamValues(date)
 
 	// Call handler
 	err := handler.GetWeekSentenceCount(c)
@@ -256,7 +289,7 @@ func TestDiaryAnalysisHandler_GetWeekAccuracyScore_Success(t *testing.T) {
 	})).Return(expectedScore, nil)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/week-accuracy-score/"+date, nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-accuracy-score?date="+date, nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
@@ -268,8 +301,6 @@ func TestDiaryAnalysisHandler_GetWeekAccuracyScore_Success(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("date")
-	c.SetParamValues(date)
 
 	// Call handler
 	err := handler.GetWeekAccuracyScore(c)
@@ -312,7 +343,7 @@ func TestDiaryAnalysisHandler_GetWeekWritingTime_Success(t *testing.T) {
 	})).Return(expectedTime, nil)
 
 	// Create request
-	req := httptest.NewRequest(http.MethodGet, "/week-writing-time/"+date, nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/diaries/analyses/weekly-writing-time?date="+date, nil)
 
 	// Set context values
 	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
@@ -324,8 +355,6 @@ func TestDiaryAnalysisHandler_GetWeekWritingTime_Success(t *testing.T) {
 	// Create Echo context
 	e := echo.New()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("date")
-	c.SetParamValues(date)
 
 	// Call handler
 	err := handler.GetWeekWritingTime(c)

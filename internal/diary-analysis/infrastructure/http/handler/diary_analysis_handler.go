@@ -31,8 +31,11 @@ func (dah *DiaryAnalysisHandler) handleWeekCount(c echo.Context, usecaseFunc fun
 		return errors.RespondWithError(c, &errors.LogicError{Message: "userIDを指定してください"})
 	}
 
-	// Extract date from URL param
-	date := c.Param("date")
+	// Extract date from query parameter
+	date := c.QueryParam("date")
+	if date == "" {
+		return errors.RespondWithError(c, &errors.ValidationError{Message: "date query parameter is required"})
+	}
 
 	// Call usecase function
 	countByDate, err := usecaseFunc(c, userID, date)
@@ -44,7 +47,7 @@ func (dah *DiaryAnalysisHandler) handleWeekCount(c echo.Context, usecaseFunc fun
 	return response.RespondSuccess(c, http.StatusOK, countByDate)
 }
 
-// GetWeekCharCount handles GET /week-char-count/:date
+// GetWeekCharCount handles GET /weekly-char-count
 func (dah *DiaryAnalysisHandler) GetWeekCharCount(c echo.Context) error {
 	slog.Debug("GetWeekCharCount called")
 	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
@@ -52,21 +55,21 @@ func (dah *DiaryAnalysisHandler) GetWeekCharCount(c echo.Context) error {
 	})
 }
 
-// GetWeekSentenceCount handles GET /week-sentence-count/:date
+// GetWeekSentenceCount handles GET /weekly-sentence-count
 func (dah *DiaryAnalysisHandler) GetWeekSentenceCount(c echo.Context) error {
 	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
 		return dah.dau.GetSentenceCountByDate(ctx.Request().Context(), userID, date)
 	})
 }
 
-// GetWeekAccuracyScore handles GET /week-accuracy-score/:date
+// GetWeekAccuracyScore handles GET /weekly-accuracy-score
 func (dah *DiaryAnalysisHandler) GetWeekAccuracyScore(c echo.Context) error {
 	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
 		return dah.dau.GetAccuracyScoreByDate(ctx.Request().Context(), userID, date)
 	})
 }
 
-// GetWeekWritingTime handles GET /week-writing-time/:date
+// GetWeekWritingTime handles GET /weekly-writing-time
 func (dah *DiaryAnalysisHandler) GetWeekWritingTime(c echo.Context) error {
 	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
 		return dah.dau.GetWritingTimeByDate(ctx.Request().Context(), userID, date)
