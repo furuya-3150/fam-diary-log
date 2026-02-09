@@ -1,9 +1,11 @@
 package repository
+
 import (
 	"context"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary-analysis/domain"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
+	"gorm.io/gorm"
 )
 
 type DiaryAnalysisRepository interface {
@@ -47,6 +49,9 @@ func (dar *diaryAnalysisRepository) List(ctx context.Context, criteria *domain.D
 		Find(&diaryAnalysis).Error
 
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return []*domain.DiaryAnalysis{}, nil
+		}
 		return nil, err
 	}
 

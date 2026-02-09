@@ -7,6 +7,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/pagination"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type DiaryRepository interface {
@@ -65,6 +66,9 @@ func (dr *diaryRepository) List(ctx context.Context, criteria *domain.DiarySearc
 	// created_at で降順ソート
 	err := q.Order("created_at DESC").Find(&diaries).Error
 	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return []*domain.Diary{}, nil
+		}
 		return nil, err
 	}
 	return diaries, nil
