@@ -8,6 +8,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
@@ -86,23 +87,32 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 		slog.Error("failed to clear OAuth state from session", "Error", err)
 	}
 
-	resp, err := h.authController.HandleGoogleCallback(c.Request().Context(), code)
+	isJoined, token, err := h.authController.HandleGoogleCallback(c.Request().Context(), code)
 	if err != nil {
 		return errors.RespondWithError(c, err)
+	}
+	cookieName := auth.AuthCookieName
+	if isJoined {
+		cookieName = auth.FamilyCookieName
 	}
 
 	// Set access token in HTTPOnly Cookie
 	accessTokenCookie := &http.Cookie{
-		Name:     "access_token",
-		Value:    resp.AccessToken,
+		Name:     cookieName,
+		Value:    token,
 		Path:     "/",
-		HttpOnly: true,                    // JavaScriptからアクセス不可（XSS対策）
-		Secure:   true,                    // HTTPS通信のみ
-		SameSite: http.SameSiteStrictMode, // CSRF対策
-		MaxAge:   int(resp.ExpiresIn),     // トークンの有効期限
+		HttpOnly: true,                          // JavaScriptからアクセス不可（XSS対策）
+		Secure:   true,                          // HTTPS通信のみ
+		SameSite: http.SameSiteStrictMode,       // CSRF対策
+		MaxAge:   int(config.Cfg.JWT.ExpiresIn), // トークンの有効期限
 	}
 	c.SetCookie(accessTokenCookie)
 
-	// レスポンスにはaccess_tokenを含めない（Cookieに保存済み）
+	// セッションを削除
+	sess.Options.MaxAge = -1
+	if err := sess.Save(c.Request(), c.Response()); err != nil {
+		slog.Error("failed to delete session", "Error", err)
+	}
+
 	return response.RespondSuccess(c, http.StatusNoContent, nil)
 }

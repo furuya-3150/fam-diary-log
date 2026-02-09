@@ -5,6 +5,7 @@ type Config struct {
 	OAuth   OAuthConfig
 	Session SessionConfig
 	JWT     JWTConfig
+	App     AppConfig
 }
 
 var Cfg Config
@@ -15,5 +16,6 @@ func Load() Config {
 		OAuth:   loadOAuth(),
 		Session: loadSession(),
 		JWT:     loadJWT(),
+		App:     loadApp(),
 	}
 }

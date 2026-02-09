@@ -15,6 +15,7 @@ type UserRepository interface {
 	GetUserByProviderID(ctx context.Context, provider domain.AuthProvider, providerID string) (*domain.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateUser(ctx context.Context, user *domain.User) (*domain.User, error)
+	GetAdminUsersByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*domain.User, error)
 }
 
 type userRepository struct {
@@ -75,4 +76,21 @@ func (r *userRepository) UpdateUser(ctx context.Context, user *domain.User) (*do
 		return nil, err
 	}
 	return user, nil
+}
+
+func (r *userRepository) GetAdminUsersByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*domain.User, error) {
+	dbConn := r.dm.DB(ctx)
+	var users []*domain.User
+	err := dbConn.
+		Table("users").
+		Joins("INNER JOIN family_members ON users.id = family_members.user_id").
+		Where("family_members.family_id = ? AND family_members.role = ?", familyID, domain.RoleAdmin).
+		Find(&users).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return []*domain.User{}, nil
+		}
+		return nil, err
+	}
+	return users, nil
 }

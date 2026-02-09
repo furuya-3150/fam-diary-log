@@ -5,10 +5,10 @@ import (
 	"net/http"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/context"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller"
 	dto "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
@@ -34,8 +34,8 @@ func (dh *DiaryHandler) Create(e echo.Context) error {
 		validationErr := &errors.ValidationError{Message: err.Error()}
 		return errors.RespondWithError(e, validationErr)
 	}
-	req.FamilyID = e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
-	req.UserID = e.Request().Context().Value(context.UserIDKey).(uuid.UUID)
+	req.FamilyID = e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
+	req.UserID = e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
 
 	res, err := dh.dc.Create(e.Request().Context(), req)
 	if err != nil {
@@ -47,7 +47,7 @@ func (dh *DiaryHandler) Create(e echo.Context) error {
 }
 
 func (dh *DiaryHandler) List(e echo.Context) error {
-	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
+	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
 
 	// validate query
 	q := dto.DiaryListQuery{TargetDate: e.QueryParam("target_date")}
@@ -69,7 +69,7 @@ func (dh *DiaryHandler) List(e echo.Context) error {
 }
 
 func (dh *DiaryHandler) GetCount(e echo.Context) error {
-	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
+	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
 	yearStr := e.Param("year")
 	monthStr := e.Param("month")
 
@@ -83,8 +83,8 @@ func (dh *DiaryHandler) GetCount(e echo.Context) error {
 }
 
 func (dh *DiaryHandler) GetStreak(e echo.Context) error {
-	userID := e.Request().Context().Value(context.UserIDKey).(uuid.UUID)
-	familyID := e.Request().Context().Value(context.FamilyIDKey).(uuid.UUID)
+	userID := e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
+	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
 
 	res, err := dh.dc.GetStreak(e.Request().Context(), userID, familyID)
 	if err != nil {

@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	infctx "github.com/furuya-3150/fam-diary-log/internal/diary-analysis/infrastructure/context"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -54,7 +54,7 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_Success(t *testing.T) {
 	}
 
 	mockUsecase.On("GetCharCountByDate", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.UserIDKey) == userID
+		return ctx.Value(auth.ContextKeyUserID) == userID
 	}), mock.MatchedBy(func(id uuid.UUID) bool {
 		return id == userID
 	}), mock.MatchedBy(func(argDate string) bool {
@@ -65,7 +65,7 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/week-char-count/"+date, nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -147,7 +147,7 @@ func TestDiaryAnalysisHandler_GetWeekCharCount_InvalidDate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/week-char-count/"+invalidDate, nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -192,7 +192,7 @@ func TestDiaryAnalysisHandler_GetWeekSentenceCount_Success(t *testing.T) {
 	}
 
 	mockUsecase.On("GetSentenceCountByDate", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.UserIDKey) == userID
+		return ctx.Value(auth.ContextKeyUserID) == userID
 	}), mock.MatchedBy(func(id uuid.UUID) bool {
 		return id == userID
 	}), mock.MatchedBy(func(argDate string) bool {
@@ -203,7 +203,7 @@ func TestDiaryAnalysisHandler_GetWeekSentenceCount_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/week-sentence-count/"+date, nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -248,7 +248,7 @@ func TestDiaryAnalysisHandler_GetWeekAccuracyScore_Success(t *testing.T) {
 	}
 
 	mockUsecase.On("GetAccuracyScoreByDate", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.UserIDKey) == userID
+		return ctx.Value(auth.ContextKeyUserID) == userID
 	}), mock.MatchedBy(func(id uuid.UUID) bool {
 		return id == userID
 	}), mock.MatchedBy(func(argDate string) bool {
@@ -259,7 +259,7 @@ func TestDiaryAnalysisHandler_GetWeekAccuracyScore_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/week-accuracy-score/"+date, nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -304,7 +304,7 @@ func TestDiaryAnalysisHandler_GetWeekWritingTime_Success(t *testing.T) {
 	}
 
 	mockUsecase.On("GetWritingTimeByDate", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.UserIDKey) == userID
+		return ctx.Value(auth.ContextKeyUserID) == userID
 	}), mock.MatchedBy(func(id uuid.UUID) bool {
 		return id == userID
 	}), mock.MatchedBy(func(argDate string) bool {
@@ -315,7 +315,7 @@ func TestDiaryAnalysisHandler_GetWeekWritingTime_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/week-writing-time/"+date, nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer

@@ -105,7 +105,7 @@ func TestGetUser_Success(t *testing.T) {
 	user := &domain.User{ID: id, Email: "test@example.com"}
 	repo.On("GetUserByID", mock.Anything, id).Return(user, nil)
 	uc := setupUserUsecase(repo, tx)
-	got, err := uc.GetUser(context.Background(), id.String())
+	got, err := uc.GetUser(context.Background(), id)
 	require.NoError(t, err)
 	require.Equal(t, user.ID, got.ID)
 	require.Equal(t, user.Email, got.Email)
@@ -116,7 +116,8 @@ func TestGetUser_InvalidUUID(t *testing.T) {
 	repo := new(MockUserRepository)
 	tx := new(MockTransactionManager)
 	uc := setupUserUsecase(repo, tx)
-	_, err := uc.GetUser(context.Background(), "invalid-uuid")
+	repo.On("GetUserByID", mock.Anything, uuid.Nil).Return(nil, nil)
+	_, err := uc.GetUser(context.Background(), uuid.Nil)
 	require.Error(t, err)
 	var verr *pkgerrors.ValidationError
 	require.ErrorAs(t, err, &verr)
@@ -128,7 +129,7 @@ func TestGetUser_NotFound(t *testing.T) {
 	tx := new(MockTransactionManager)
 	repo.On("GetUserByID", mock.Anything, id).Return(nil, nil)
 	uc := setupUserUsecase(repo, tx)
-	_, err := uc.GetUser(context.Background(), id.String())
+	_, err := uc.GetUser(context.Background(), id)
 	require.Error(t, err)
 	var verr *pkgerrors.ValidationError
 	require.ErrorAs(t, err, &verr)
@@ -141,7 +142,7 @@ func TestGetUser_RepoError(t *testing.T) {
 	tx := new(MockTransactionManager)
 	repo.On("GetUserByID", mock.Anything, id).Return(nil, errors.New("db fail"))
 	uc := setupUserUsecase(repo, tx)
-	_, err := uc.GetUser(context.Background(), id.String())
+	_, err := uc.GetUser(context.Background(), id)
 	require.Error(t, err)
 	var ierr *pkgerrors.InternalError
 	require.ErrorAs(t, err, &ierr)

@@ -25,6 +25,14 @@ func (m *MockFamilyRepo) CreateFamily(ctx context.Context, family *domain.Family
 	return args.Get(0).(*domain.Family), args.Error(1)
 }
 
+func (m *MockFamilyRepo) GetFamilyByID(ctx context.Context, id uuid.UUID) (*domain.Family, error) {
+	args := m.Called(ctx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.Family), args.Error(1)
+}
+
 type MockFamilyMemberRepo struct{ mock.Mock }
 
 func (m *MockFamilyMemberRepo) IsUserAlreadyMember(ctx context.Context, userID uuid.UUID) (bool, error) {
@@ -34,6 +42,13 @@ func (m *MockFamilyMemberRepo) IsUserAlreadyMember(ctx context.Context, userID u
 func (m *MockFamilyMemberRepo) AddFamilyMember(ctx context.Context, member *domain.FamilyMember) error {
 	args := m.Called(ctx, member)
 	return args.Error(0)
+}
+func (m *MockFamilyMemberRepo) GetFamilyMemberByUserID(ctx context.Context, userID uuid.UUID) (*domain.FamilyMember, error) {
+	args := m.Called(ctx, userID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*domain.FamilyMember), args.Error(1)
 }
 
 type MockFamilyInvitationRepository struct{ mock.Mock }
@@ -146,6 +161,7 @@ func newTestEnv() (context.Context,
 	*MockFamilyMemberRepo,
 	*MockFamilyInvitationRepository,
 	*MockFamilyJoinRequestRepository,
+	*MockUserRepository,
 	*MockTxManager,
 	*MockTokenGen,
 	*MockWSPblisher,
@@ -156,19 +172,20 @@ func newTestEnv() (context.Context,
 	fmr := new(MockFamilyMemberRepo)
 	fir := new(MockFamilyInvitationRepository)
 	tjr := new(MockFamilyJoinRequestRepository)
+	ur := new(MockUserRepository)
 	tm := new(MockTxManager)
 	tg := new(MockTokenGen)
 	wsp := new(MockWSPblisher)
 	mp := new(MockMailPublisher)
-
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{}, tg, wsp, mp)
+		
+	u := NewFamilyUsecase(fr, fmr, fir, tjr, ur, tm, &clock.Fixed{}, tg, wsp, mp)
 	ctx := context.Background()
 
-	return ctx, fr, fmr, fir, tjr, tm, tg, wsp, mp, u
+	return ctx, fr, fmr, fir, tjr, ur, tm, tg, wsp, mp, u
 }
 
 func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, _, tm, tg, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -177,28 +194,28 @@ func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
 	fr.On("CreateFamily", ctx, mock.AnythingOfType("*domain.Family")).Return(family, nil)
 	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
 	tm.On("CommitTx", ctx).Return(nil)
+	tg.On("GenerateToken", ctx, mock.Anything, mock.Anything, mock.Anything).Return("signed", nil)
 
-	result, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.NoError(t, err)
-	require.Equal(t, family, result)
 	fr.AssertExpectations(t)
 	fmr.AssertExpectations(t)
 	tm.AssertExpectations(t)
+	tg.AssertExpectations(t)
 }
 
 func TestFamilyUsecase_CreateFamily_AlreadyMember(t *testing.T) {
-	ctx, _, fmr, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, _, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(true, nil)
 
-	result, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
-	require.Nil(t, result)
 }
 
 func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, _, tm, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -206,13 +223,12 @@ func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
 	fr.On("CreateFamily", ctx, mock.AnythingOfType("*domain.Family")).Return(nil, errors.New("repo error"))
 	tm.On("RollbackTx", ctx).Return(nil)
 
-	result, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
-	require.Nil(t, result)
 }
 
 func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, _, tm, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -222,13 +238,12 @@ func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
 	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add member error"))
 	tm.On("RollbackTx", ctx).Return(nil)
 
-	result, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
-	require.Nil(t, result)
 }
 
 func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, mp, u := newTestEnv()
+	ctx, fr, _, fir, _, ur, _, _, _, mp, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -237,31 +252,42 @@ func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 	fir.On("CreateInvitation", mock.Anything, mock.AnythingOfType("*domain.FamilyInvitation")).Return(nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
 	mp.On("Close").Return(nil)
+	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
+	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 
 	err := u.InviteMembers(ctx, InviteMembersInput{FamilyID: familyID, InviterUserID: inviterID, Emails: []string{"a@example.com"}})
 	require.NoError(t, err)
 	fir.AssertExpectations(t)
 	mp.AssertExpectations(t)
+	ur.AssertExpectations(t)
+	fr.AssertExpectations(t)
 }
 
 // InviteMembers: 正常系 - 既存更新
 func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, fr, _, fir, _, ur, _, _, _, mp, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
 	existing := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InviterUserID: inviterID, InvitationToken: "old", ExpiresAt: time.Now()}
 	fir.On("FindInvitationByFamilyID", mock.Anything, familyID).Return(existing, nil)
 	fir.On("UpdateInvitationTokenAndExpires", mock.Anything, familyID, inviterID, mock.AnythingOfType("string"), mock.Anything).Return(nil)
+	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
+	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
+	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
+	mp.On("Close").Return(nil)
 
 	err := u.InviteMembers(ctx, InviteMembersInput{FamilyID: familyID, InviterUserID: inviterID, Emails: []string{"a@example.com"}})
 	require.NoError(t, err)
 	fir.AssertExpectations(t)
+	ur.AssertExpectations(t)
+	fr.AssertExpectations(t)
+	mp.AssertExpectations(t)
 }
 
 // InviteMembers: 異常系 - Findでエラー
 func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -273,7 +299,7 @@ func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
 
 // InviteMembers: 異常系 - Createでエラー
 func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -286,7 +312,7 @@ func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
 
 // InviteMembers: 異常系 - Updateでエラー
 func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -299,7 +325,7 @@ func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
-	ctx, _, fmr, fir, tjr, _, _, _, mp, u := newTestEnv()
+	ctx, _, fmr, fir, tjr, ur, _, _, _, mp, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-123"
 	familyID := uuid.New()
@@ -311,15 +337,24 @@ func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
 	tjr.On("CreateJoinRequest", mock.Anything, mock.AnythingOfType("*domain.FamilyJoinRequest")).Return(nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
 	mp.On("Close").Return(nil)
+	ur.On("GetAdminUsersByFamilyID", mock.Anything, familyID).Return([]*domain.User{
+		{ID: uuid.New(), Email: "admin@example.com"},
+	}, nil)
+	ur.On("GetUserByID", mock.Anything, userID).Return(&domain.User{ID: userID, Email: "user@example.com"}, nil)
+
+	// fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 
 	err := u.ApplyToFamily(ctx, token, userID)
 	require.NoError(t, err)
 	fir.AssertExpectations(t)
 	fmr.AssertExpectations(t)
+	tjr.AssertExpectations(t)
+	mp.AssertExpectations(t)
+	ur.AssertExpectations(t)
 }
 
 func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-404"
 
@@ -331,7 +366,7 @@ func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-err"
 
@@ -342,7 +377,7 @@ func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
-	ctx, _, fmr, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-exist"
 	familyID := uuid.New()
@@ -357,7 +392,7 @@ func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_AddMemberError(t *testing.T) {
-	ctx, _, fmr, fir, tjr, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, tjr, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-add-err"
 	familyID := uuid.New()
@@ -373,7 +408,7 @@ func TestFamilyUsecase_ApplyToFamily_AddMemberError(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_AlreadyPending(t *testing.T) {
-	ctx, _, fmr, fir, tjr, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, tjr, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-pending"
 	familyID := uuid.New()
@@ -390,18 +425,8 @@ func TestFamilyUsecase_ApplyToFamily_AlreadyPending(t *testing.T) {
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	tg := new(MockTokenGen)
-	wsp := new(MockWSPblisher)
-	mp := new(MockMailPublisher)
-	now := time.Now()
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now}, tg, wsp, mp)
+	ctx, _, fmr, _, tjr, _, tm, _, wsp, _, u := newTestEnv()
 
-	ctx := context.Background()
 	requestID := uuid.New()
 	requestUserID := uuid.New()
 	responderID := uuid.New()
@@ -441,18 +466,18 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testing.T) {
-	fr := new(MockFamilyRepo)
-	fmr := new(MockFamilyMemberRepo)
-	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
-	tm := new(MockTxManager)
-	now := time.Now()
-	tg := new(MockTokenGen)
-	wsp := new(MockWSPblisher)
-	mp := new(MockMailPublisher)
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now}, tg, wsp, mp)
+	// fr := new(MockFamilyRepo)
+	// fmr := new(MockFamilyMemberRepo)
+	// fir := new(MockFamilyInvitationRepository)
+	// tjr := new(MockFamilyJoinRequestRepository)
+	// tm := new(MockTxManager)
+	// now := time.Now()
+	// tg := new(MockTokenGen)
+	// wsp := new(MockWSPblisher)
+	// mp := new(MockMailPublisher)
+	// u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now}, tg, wsp, mp)
+	ctx, _, _, _, tjr, _, _, _, wsp, _, u := newTestEnv()
 
-	ctx := context.Background()
 	requestID := uuid.New()
 	responderID := uuid.New()
 	requestUserID := uuid.New()
@@ -483,7 +508,7 @@ func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testi
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_NotFound(t *testing.T) {
-	ctx, _, _, _, tjr, _, _, _, _, u := newTestEnv()
+	ctx, _, _, _, tjr, _, _, _, _, _, u := newTestEnv()
 	requestID := uuid.New()
 	responderID := uuid.New()
 
@@ -496,7 +521,7 @@ func TestFamilyUsecase_RespondToJoinRequest_NotFound(t *testing.T) {
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_BadRequest_WhenNotPending(t *testing.T) {
-	ctx, _, _, _, tjr, _, _, _, _, u := newTestEnv()
+	ctx, _, _, _, tjr, _, _, _, _, _, u := newTestEnv()
 	requestID := uuid.New()
 	responderID := uuid.New()
 
@@ -514,7 +539,7 @@ func TestFamilyUsecase_RespondToJoinRequest_BadRequest_WhenNotPending(t *testing
 }
 
 func TestFamilyUsecase_RespondToJoinRequest_UpdateError_Rollback(t *testing.T) {
-	ctx, _, _, _, tjr, tm, _, wsp, mp, u := newTestEnv()
+	ctx, _, _, _, tjr, _, tm, _, wsp, mp, u := newTestEnv()
 	requestID := uuid.New()
 	responderID := uuid.New()
 

@@ -11,7 +11,7 @@ import (
 type AuthController interface {
 	// OAuth2 server-side flow methods
 	InitiateGoogleLogin() (authURL string, state string, err error)
-	HandleGoogleCallback(ctx context.Context, code string) (*dto.AuthResponse, error)
+	HandleGoogleCallback(ctx context.Context, code string) (bool, string, error)
 }
 
 type authController struct {
@@ -30,11 +30,8 @@ func (c *authController) toAuthResponse(domainResp *domain.AuthResponse) *dto.Au
 			ID:        domainResp.User.ID,
 			Email:     domainResp.User.Email,
 			Name:      domainResp.User.Name,
-			Provider:  string(domainResp.User.Provider),
-			CreatedAt: domainResp.User.CreatedAt,
 		},
 		AccessToken: domainResp.AccessToken,
-		ExpiresIn:   domainResp.ExpiresIn,
 	}
 }
 
@@ -44,10 +41,10 @@ func (c *authController) InitiateGoogleLogin() (string, string, error) {
 }
 
 // HandleGoogleCallback handles the OAuth callback from Google
-func (c *authController) HandleGoogleCallback(ctx context.Context, code string) (*dto.AuthResponse, error) {
-	authResp, err := c.authUsecase.HandleGoogleCallback(ctx, code)
+func (c *authController) HandleGoogleCallback(ctx context.Context, code string) (bool, string, error) {
+	isJoined, token, err := c.authUsecase.HandleGoogleCallback(ctx, code)
 	if err != nil {
-		return nil, err
+		return false, "", err
 	}
-	return c.toAuthResponse(authResp), nil
+	return isJoined, token, nil
 }

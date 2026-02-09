@@ -1,11 +1,12 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 
-	infctx "github.com/furuya-3150/fam-diary-log/internal/diary-analysis/infrastructure/context"
 	"github.com/furuya-3150/fam-diary-log/internal/diary-analysis/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -24,7 +25,8 @@ func NewDiaryAnalysisHandler(dau usecase.DiaryAnalysisUsecase) *DiaryAnalysisHan
 // handleWeekCount is a common handler for week-based counts
 func (dah *DiaryAnalysisHandler) handleWeekCount(c echo.Context, usecaseFunc func(echo.Context, uuid.UUID, string) (map[string]interface{}, error)) error {
 	// Extract user ID from context
-	userID, ok := c.Request().Context().Value(infctx.UserIDKey).(uuid.UUID)
+	userID, ok := c.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
+	slog.Debug("Extracted userID from context", "userID", userID)
 	if !ok || userID == uuid.Nil {
 		return errors.RespondWithError(c, &errors.LogicError{Message: "userIDを指定してください"})
 	}
@@ -44,6 +46,7 @@ func (dah *DiaryAnalysisHandler) handleWeekCount(c echo.Context, usecaseFunc fun
 
 // GetWeekCharCount handles GET /week-char-count/:date
 func (dah *DiaryAnalysisHandler) GetWeekCharCount(c echo.Context) error {
+	slog.Debug("GetWeekCharCount called")
 	return dah.handleWeekCount(c, func(ctx echo.Context, userID uuid.UUID, date string) (map[string]interface{}, error) {
 		return dah.dau.GetCharCountByDate(ctx.Request().Context(), userID, date)
 	})

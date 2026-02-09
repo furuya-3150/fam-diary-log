@@ -6,11 +6,13 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type FamilyMemberRepository interface {
 	IsUserAlreadyMember(ctx context.Context, userID uuid.UUID) (bool, error)
 	AddFamilyMember(ctx context.Context, member *domain.FamilyMember) error
+	GetFamilyMemberByUserID(ctx context.Context, userID uuid.UUID) (*domain.FamilyMember, error)
 }
 
 type familyMemberRepository struct {
@@ -34,4 +36,17 @@ func (r *familyMemberRepository) AddFamilyMember(ctx context.Context, member *do
 		return err
 	}
 	return nil
+}
+
+func (r *familyMemberRepository) GetFamilyMemberByUserID(ctx context.Context, userID uuid.UUID) (*domain.FamilyMember, error) {
+	dbConn := r.dm.DB(ctx)
+	var member domain.FamilyMember
+	err := dbConn.Where("user_id = ?", userID).First(&member).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &member, nil
 }

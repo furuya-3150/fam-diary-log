@@ -26,7 +26,7 @@ func (m *MockUserUsecase) EditUser(ctx context.Context, input *usecase.EditUserI
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
-func (m *MockUserUsecase) GetUser(ctx context.Context, userID string) (*domain.User, error) {
+func (m *MockUserUsecase) GetUser(ctx context.Context, userID uuid.UUID) (*domain.User, error) {
 	args := m.Called(ctx, userID)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
@@ -81,9 +81,9 @@ func TestUserController_GetProfile_Success(t *testing.T) {
 
 	id := uuid.New()
 	expected := &domain.User{ID: id, Email: "test@example.com"}
-	mockUsecase.On("GetUser", mock.Anything, id.String()).Return(expected, nil)
+	mockUsecase.On("GetUser", mock.Anything, id).Return(expected, nil)
 
-	got, err := controller.GetProfile(context.Background(), id.String())
+	got, err := controller.GetProfile(context.Background(), id)
 	require.NoError(t, err)
 	require.Equal(t, expected.ID, got.ID)
 	require.Equal(t, expected.Email, got.Email)
@@ -95,9 +95,9 @@ func TestUserController_GetProfile_Error(t *testing.T) {
 	controller := NewUserController(mockUsecase)
 
 	id := uuid.New()
-	mockUsecase.On("GetUser", mock.Anything, id.String()).Return(nil, errors.New("fail"))
+	mockUsecase.On("GetUser", mock.Anything, id).Return(nil, errors.New("fail"))
 
-	_, err := controller.GetProfile(context.Background(), id.String())
+	_, err := controller.GetProfile(context.Background(), id)
 	require.Error(t, err)
 	mockUsecase.AssertExpectations(t)
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/diary/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/labstack/echo/v4"
 )
 
@@ -38,6 +39,7 @@ func NewRouter() *echo.Echo {
 
 	// diary
 	diary := e.Group("/diaries")
+	diary.Use(auth.JWTAuthMiddleware(config.JWT.Secret, auth.FamilyCookieName))
 	diary.POST("", diaryHandler.Create)
 	diary.GET("", diaryHandler.List)
 	diary.GET("/count/:year/:month", diaryHandler.GetCount)

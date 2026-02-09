@@ -6,6 +6,8 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller"
 	controller_dto "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 )
 
@@ -29,6 +31,9 @@ func (h *userHandler) EditProfile(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request body" + err.Error()})
 	}
+	userId := c.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
+	req.ID = userId
+
 	user, err := h.userController.EditProfile(c.Request().Context(), &req)
 	if err != nil {
 		return errors.RespondWithError(c, err)
@@ -39,9 +44,9 @@ func (h *userHandler) EditProfile(c echo.Context) error {
 // GetProfile GET /users/me
 func (h *userHandler) GetProfile(c echo.Context) error {
 	ctx := c.Request().Context()
-	val := ctx.Value("user_id")
-	userID, ok := val.(string)
-	if !ok || userID == "" {
+	val := ctx.Value(auth.ContextKeyUserID)
+	userID, ok := val.(uuid.UUID)
+	if !ok || userID == uuid.Nil {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request"})
 	}
 	user, err := h.userController.GetProfile(ctx, userID)

@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	middAuth "github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 )
 
 func NewRouter() *echo.Echo {
@@ -25,6 +26,14 @@ func NewRouter() *echo.Echo {
 
 	dbManager := db.NewDBManager(cfg.DB.DatabaseURL)
 	txManager := db.NewTransaction(dbManager)
+
+	// Family
+	familyRepo := repository.NewFamilyRepository(dbManager)
+	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
+	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
+	familyJoinRequestRepo := repository.NewFamilyJoinRequestRepository(dbManager)
+	// token generator (infra) for signing JWTs
+	tokenGenerator := jwtgen.NewTokenGenerator(&clock.Real{})
 
 	// OAuth providers - Google only
 	googleProvider := oauth.NewGoogleProviderWithOAuth2(
@@ -35,7 +44,7 @@ func NewRouter() *echo.Echo {
 
 	// Auth
 	authRepo := repository.NewUserRepository(dbManager)
-	authUsecase := usecase.NewAuthUsecase(authRepo, googleProvider)
+	authUsecase := usecase.NewAuthUsecase(authRepo, familyMemberRepo, googleProvider, tokenGenerator)
 	authController := controller.NewAuthController(authUsecase)
 	authHandler := handler.NewAuthHandler(authController)
 
@@ -45,13 +54,6 @@ func NewRouter() *echo.Echo {
 	userHandler := handler.NewUserHandler(userController)
 
 
-	// Family
-	familyRepo := repository.NewFamilyRepository(dbManager)
-	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
-	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
-	familyJoinRequestRepo := repository.NewFamilyJoinRequestRepository(dbManager)
-	// token generator (infra) for signing JWTs
-	tokenGenerator := jwtgen.NewTokenGenerator(&clock.Real{})
 
 	// mail broker publisher
 	pub := broker.NewDiaryMailerPublisher(slog.Default())
@@ -61,9 +63,9 @@ func NewRouter() *echo.Echo {
 	// Run the hub
 	go hub.Run()
 	wsHandler := ws.NewWSHandler(hub)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, txManager, &clock.Real{}, tokenGenerator, hub, pub)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, authRepo,txManager, &clock.Real{}, tokenGenerator, hub, pub)
 	familyController := controller.NewFamilyController(familyUsecase)
-	familyHandler := handler.NewFamilyHandler(familyController)
+	familyHandler := handler.NewFamilyHandler(familyController, familyUsecase)
 
 	// Notification settings
 	notificationRepo := repository.NewNotificationSettingRepository(dbManager)
@@ -93,20 +95,27 @@ func NewRouter() *echo.Echo {
 	auth.GET("/google/callback", authHandler.GoogleCallback)
 
 	// User routes
-	e.PUT("/users/me", userHandler.EditProfile)
-	e.GET("/users/me", userHandler.GetProfile)
+	users := e.Group("/users")
+	users.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	users.PUT("/me", userHandler.EditProfile)
+	users.GET("/me", userHandler.GetProfile)
 
-	e.POST("/families", familyHandler.CreateFamily)
-	e.POST("/families/invitations", familyHandler.InviteMembers)
-	e.POST("/families/apply", familyHandler.ApplyToFamily)
-	e.POST("/families/respond", familyHandler.RespondToJoinRequest)
-	e.POST("/families/join", familyHandler.JoinFamily)
+	// Family routes
+	families := e.Group("/families")
+	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
+	families.POST("/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	families.POST("/apply", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
+	families.POST("/respond", familyHandler.RespondToJoinRequest, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	families.POST("/join", familyHandler.JoinFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
 
 	// WebSocket route
-	e.GET("/ws", wsHandler.Handle)
+	e.GET("/ws", wsHandler.Handle, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
 
-	e.PUT("/settings/notifications", notificationHandler.UpdateNotificationSetting)
-	e.GET("/settings/notifications", notificationHandler.GetNotificationSetting)
+	// Notification settings routes
+	settings := e.Group("/settings")
+	settings.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	settings.PUT("/notifications", notificationHandler.UpdateNotificationSetting)
+	settings.GET("/notifications", notificationHandler.GetNotificationSetting)
 
 	return e
 }

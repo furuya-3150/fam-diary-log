@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	infctx "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/context"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/google/uuid"
 )
 
@@ -37,8 +37,8 @@ func TestE2E_CreateDiary_Success(t *testing.T) {
 
 	// Add auth context
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
@@ -88,8 +88,8 @@ func TestE2E_CreateDiary_ValidationError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	ctx := req.Context()
-	ctx = context.WithValue(ctx, infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	rec := httptest.NewRecorder()
@@ -137,8 +137,8 @@ func TestE2E_CreateDiary_MultipleDiaries(t *testing.T) {
 		req.Header.Set("Content-Type", "application/json")
 
 		ctx := req.Context()
-		ctx = context.WithValue(ctx, infctx.FamilyIDKey, familyID)
-		ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+		ctx = context.WithValue(ctx, auth.ContextKeyFamilyID, familyID)
+		ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 		req = req.WithContext(ctx)
 
 		rec := httptest.NewRecorder()

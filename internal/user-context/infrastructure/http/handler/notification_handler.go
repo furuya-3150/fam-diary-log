@@ -7,6 +7,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -27,13 +28,13 @@ func NewNotificationHandler(nu usecase.NotificationUsecase) NotificationHandler 
 
 func (h *notificationHandler) GetNotificationSetting(c echo.Context) error {
 	ctx := c.Request().Context()
-	val := ctx.Value("user_id")
+	val := ctx.Value(auth.ContextKeyUserID)
 	userID, ok := val.(uuid.UUID)
 	if !ok || userID == uuid.Nil {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
 	}
 
-	val = ctx.Value("family_id")
+	val = ctx.Value(auth.ContextKeyFamilyID)
 	familyID, ok := val.(uuid.UUID)
 	if !ok || familyID == uuid.Nil {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid family_id context"})
@@ -57,13 +58,13 @@ func (h *notificationHandler) UpdateNotificationSetting(c echo.Context) error {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request body: " + err.Error()})
 	}
 	ctx := c.Request().Context()
-	val := ctx.Value("user_id")
+	val := ctx.Value(auth.ContextKeyUserID)
 	userID, ok := val.(uuid.UUID)
 	if !ok || userID == uuid.Nil {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
 	}
 
-	val = ctx.Value("family_id")
+	val = ctx.Value(auth.ContextKeyFamilyID)
 	familyID, ok := val.(uuid.UUID)
 	if !ok || familyID == uuid.Nil {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid family_id context"})

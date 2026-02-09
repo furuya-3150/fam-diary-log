@@ -13,9 +13,9 @@ import (
 
 type MockTokenGen struct{ mock.Mock }
 
-func (m *MockTokenGen) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error) {
+func (m *MockTokenGen) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, error) {
 	args := m.Called(ctx, userID, familyID, role)
-	return args.String(0), int64(args.Int(1)), args.Error(2)
+	return args.String(0), args.Error(1)
 }
 
 type MockPublisher struct{ mock.Mock }
@@ -30,7 +30,7 @@ func (m *MockPublisher) CloseUserConnections(userID uuid.UUID) {
 }
 
 func TestJoinFamilyIfApproved_Success(t *testing.T) {
-	ctx, _, fmr, _, fjr, _, tg, _, _, u := newTestEnv()
+	ctx, _, fmr, _, fjr, _, _, tg, _, _, u := newTestEnv()
 
 	userID := uuid.New()
 	famID := uuid.New()
@@ -42,12 +42,11 @@ func TestJoinFamilyIfApproved_Success(t *testing.T) {
 	// tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
 	// tm.On("CommitTx", mock.Anything).Return(nil)
-	tg.On("GenerateToken", mock.Anything, userID, famID, domain.RoleMember).Return("signed", 3600, nil)
+	tg.On("GenerateToken", mock.Anything, userID, famID, domain.RoleMember).Return("signed", nil)
 
-	token, expires, err := u.JoinFamilyIfApproved(ctx, userID)
+	token, err := u.JoinFamilyIfApproved(ctx, userID)
 	require.NoError(t, err)
 	require.Equal(t, "signed", token)
-	require.Equal(t, int64(3600), expires)
 
 	fjr.AssertExpectations(t)
 	fmr.AssertExpectations(t)
@@ -55,31 +54,31 @@ func TestJoinFamilyIfApproved_Success(t *testing.T) {
 }
 
 func TestJoinFamilyIfApproved_NoApprovedRequest(t *testing.T) {
-	_, _, _, _, fjr, _, _, _, _, u := newTestEnv()
+	_, _, _, _, fjr, _, _, _, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
 
 	fjr.On("FindApprovedByUser", mock.Anything, userID).Return(nil, nil)
 
-	_, _, err := u.JoinFamilyIfApproved(ctx, userID)
+	_, err := u.JoinFamilyIfApproved(ctx, userID)
 	require.Error(t, err)
 }
 
 func TestJoinFamilyIfApproved_AlreadyMember(t *testing.T) {
-	_, _, fmr, _, fjr, _, _, _, _, u := newTestEnv()
+	_, _, fmr, _, fjr, _, _, _, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
 	fjr.On("FindApprovedByUser", mock.Anything, userID).Return(&domain.FamilyJoinRequest{}, nil)
 	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(true, nil)
 
-	_, _, err := u.JoinFamilyIfApproved(ctx, userID)
+	_, err := u.JoinFamilyIfApproved(ctx, userID)
 	require.Error(t, err)
 }
 
 func TestJoinFamilyIfApproved_AddMemberError(t *testing.T) {
-	_, _, fmr, _, fjr, _, _, _, _, u := newTestEnv()
+	_, _, fmr, _, fjr, _, _, _, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -92,12 +91,12 @@ func TestJoinFamilyIfApproved_AddMemberError(t *testing.T) {
 	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add err"))
 	// tm.On("RollbackTx", mock.Anything).Return(nil)
 
-	_, _, err := u.JoinFamilyIfApproved(ctx, userID)
+	_, err := u.JoinFamilyIfApproved(ctx, userID)
 	require.Error(t, err)
 }
 
 func TestJoinFamilyIfApproved_TokenGenError(t *testing.T) {
-	_, _, fmr, _, fjr, _, tg, _, _, u := newTestEnv()
+	_, _, fmr, _, fjr, _, _, tg, _, _, u := newTestEnv()
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -109,8 +108,8 @@ func TestJoinFamilyIfApproved_TokenGenError(t *testing.T) {
 	// tm.On("BeginTx", mock.Anything).Return(ctx, nil)
 	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
 	// tm.On("CommitTx", mock.Anything).Return(nil)
-	tg.On("GenerateToken", mock.Anything, userID, famID, domain.RoleMember).Return("", 0, errors.New("tg err"))
+	tg.On("GenerateToken", mock.Anything, userID, famID, domain.RoleMember).Return("", errors.New("tg err"))
 
-	_, _, err := u.JoinFamilyIfApproved(ctx, userID)
+	_, err := u.JoinFamilyIfApproved(ctx, userID)
 	require.Error(t, err)
 }

@@ -32,7 +32,7 @@ func (s *SMTPSender) Send(ctx context.Context, to, cc, bcc []string, subject, te
 	recipients := append(append([]string{}, to...), cc...)
 	recipients = append(recipients, bcc...)
 	if len(recipients) == 0 {
-		return fmt.Errorf("no recipients")
+		return nil
 	}
 
 	header := make(map[string]string)

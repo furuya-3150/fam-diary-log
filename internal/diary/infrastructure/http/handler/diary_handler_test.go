@@ -9,9 +9,9 @@ import (
 	"testing"
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
-	infctx "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/context"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
+	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -76,7 +76,7 @@ func TestDiaryHandler_Create_Success(t *testing.T) {
 	}
 
 	mockController.On("Create", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.FamilyIDKey) == familyID && ctx.Value(infctx.UserIDKey) == userID
+		return ctx.Value(auth.ContextKeyFamilyID) == familyID && ctx.Value(auth.ContextKeyUserID) == userID
 	}), mock.MatchedBy(func(d *domain.Diary) bool {
 		return d.Title == requestBody.Title && d.Content == requestBody.Content
 	})).Return(expectedResponse, nil)
@@ -87,8 +87,8 @@ func TestDiaryHandler_Create_Success(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -146,8 +146,8 @@ func TestDiaryHandler_Create_ValidationError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -202,8 +202,8 @@ func TestDiaryHandler_Create_InternalError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -249,8 +249,8 @@ func TestDiaryHandler_Create_BindError(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -316,15 +316,15 @@ func TestDiaryHandler_List_Success(t *testing.T) {
 	}
 
 	mockController.On("List", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.FamilyIDKey) == familyID
+		return ctx.Value(auth.ContextKeyFamilyID) == familyID
 	}), familyID, mock.Anything).Return(expectedResponses, nil)
 
 	// Create request
 	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=2026-01-01", nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -371,8 +371,8 @@ func TestDiaryHandler_List_Error(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=2026-01-01", nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -406,7 +406,7 @@ func TestDiaryHandler_List_MissingTargetDate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/diaries", nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -443,7 +443,7 @@ func TestDiaryHandler_List_InvalidTargetDate(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/diaries?target_date=invalid-date", nil)
 
 	// Set context values
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -480,7 +480,7 @@ func TestDiaryHandler_GetCount_Success(t *testing.T) {
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/diaries/count/2026/01", nil)
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -519,7 +519,7 @@ func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/diaries/count/2026/13", nil)
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -562,13 +562,13 @@ func TestDiaryHandler_GetStreak_Success(t *testing.T) {
 	}
 
 	mockController.On("GetStreak", mock.MatchedBy(func(ctx context.Context) bool {
-		return ctx.Value(infctx.FamilyIDKey) == familyID && ctx.Value(infctx.UserIDKey) == userID
+		return ctx.Value(auth.ContextKeyFamilyID) == familyID && ctx.Value(auth.ContextKeyUserID) == userID
 	}), userID, familyID).Return(expectedResponse, nil)
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/diaries/streak", nil)
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -618,8 +618,8 @@ func TestDiaryHandler_GetStreak_ControllerError(t *testing.T) {
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/diaries/streak", nil)
-	ctx := context.WithValue(req.Context(), infctx.FamilyIDKey, familyID)
-	ctx = context.WithValue(ctx, infctx.UserIDKey, userID)
+	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer

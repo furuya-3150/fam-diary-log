@@ -11,7 +11,7 @@ import (
 )
 
 type TokenGenerator interface {
-	GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error)
+	GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, error)
 }
 
 type tokenGenerator struct {
@@ -22,22 +22,26 @@ func NewTokenGenerator(clk clock.Clock) TokenGenerator {
 	return &tokenGenerator{clk: clk}
 }
 
-func (t *tokenGenerator) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, int64, error) {
+func (t *tokenGenerator) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, error) {
 	c := cfg.Cfg
 	now := t.clk.Now()
 	expiresAt := now.Add(c.JWT.ExpiresIn)
-	claims := jwt.MapClaims{
+	var claims jwt.MapClaims
+	claims = jwt.MapClaims{
 		"sub":       userID.String(),
 		"family_id": familyID.String(),
-		"role":      role.String(),
 		"iat":       now.Unix(),
 		"exp":       expiresAt.Unix(),
 		"iss":       c.JWT.Issuer,
 	}
+	if familyID != uuid.Nil {
+		claims["family_id"] = familyID.String()
+		claims["role"] = role.String()
+	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString([]byte(c.JWT.Secret))
 	if err != nil {
-		return "", 0, err
+		return "", err
 	}
-	return signed, int64(c.JWT.ExpiresIn.Seconds()), nil
+	return signed, nil
 }
