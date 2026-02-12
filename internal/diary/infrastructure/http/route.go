@@ -39,7 +39,7 @@ func NewRouter() *echo.Echo {
 
 	// family diaries - authenticated user's family context
 	diaries := e.Group("/families/me/diaries")
-	diaries.Use(auth.JWTAuthMiddleware(config.JWT.Secret, auth.FamilyCookieName))
+	diaries.Use(auth.JWTAuthMiddleware(config.JWT.Secret), auth.RequireFamily())
 	diaries.POST("", diaryHandler.Create)
 	diaries.GET("", diaryHandler.List)
 	diaries.GET("/count", diaryHandler.GetCount)

@@ -424,7 +424,7 @@ func TestFamilyHandler_ActivateFamilyContext_SetsCookie_Success(t *testing.T) {
 	require.NotEmpty(t, cookies)
 	found := false
 	for _, ck := range cookies {
-		if ck.Name == auth.FamilyCookieName {
+		if ck.Name == auth.AuthCookieName {
 			found = true
 			require.Equal(t, token, ck.Value)
 			require.Equal(t, "/", ck.Path)

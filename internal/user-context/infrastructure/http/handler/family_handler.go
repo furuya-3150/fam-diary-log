@@ -56,7 +56,7 @@ func (h *familyHandler) CreateFamily(c echo.Context) error {
 	}
 
 	accessTokenCookie := &http.Cookie{
-		Name:     auth.FamilyCookieName,
+		Name:     auth.AuthCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
@@ -184,7 +184,7 @@ func (h *familyHandler) ActivateFamilyContext(c echo.Context) error {
 	}
 
 	accessTokenCookie := &http.Cookie{
-		Name:     auth.FamilyCookieName,
+		Name:     auth.AuthCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,

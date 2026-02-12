@@ -3,7 +3,6 @@ package auth
 import (
 	"context"
 	"log"
-	"net/http"
 
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/furuya-3150/fam-diary-log/pkg/jwt"
@@ -15,8 +14,7 @@ import (
 type contextKey string
 
 const (
-	AuthCookieName   = "auth_token"
-	FamilyCookieName = "family_token"
+	AuthCookieName = "auth_token"
 )
 
 const (
@@ -62,13 +60,12 @@ func ParseRole(s string) Role {
 //
 // Parameters:
 //   - jwtSecret: Secret key for validating JWT
-//   - cookieName: Name of the cookie containing the JWT (default: "auth_token")
-func JWTAuthMiddleware(jwtSecret string, cookieName string) echo.MiddlewareFunc {
+func JWTAuthMiddleware(jwtSecret string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			log.Println("JWTAuthMiddleware called")
 			// Extract JWT from cookie
-			cookie, err := c.Cookie(cookieName)
+			cookie, err := c.Cookie(AuthCookieName)
 			if err != nil {
 				return errors.RespondWithError(c, &errors.UnauthorizedError{Message: "missing authentication cookie"})
 			}
@@ -121,17 +118,35 @@ func GetRoleFromContext(ctx context.Context) (Role, bool) {
 	return role, ok
 }
 
-// RequireAuth is a helper middleware that enforces authentication
-// Use this after JWTAuthMiddleware(optional=true) to require auth on specific routes
+// RequireAuth is a helper middleware that enforces user authentication
+// Use this after JWTAuthMiddleware to require user authentication on specific routes
 func RequireAuth() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			ctx := c.Request().Context()
 			_, hasUser := GetUserIDFromContext(ctx)
-			_, hasFamily := GetFamilyIDFromContext(ctx)
 
-			if !hasUser || !hasFamily {
-				return echo.NewHTTPError(http.StatusUnauthorized, "authentication required")
+			if !hasUser {
+				return errors.RespondWithError(c, &errors.UnauthorizedError{Message: "authentication required"})
+			}
+
+			return next(c)
+		}
+	}
+}
+
+// RequireFamily is a helper middleware that enforces family context
+// Use this after JWTAuthMiddleware to require family membership on specific routes
+func RequireFamily() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ctx := c.Request().Context()
+			familyID, hasFamily := GetFamilyIDFromContext(ctx)
+
+			if !hasFamily || familyID == uuid.Nil {
+				// return echo.NewHTTPError(http.StatusForbidden, errors.UnauthorizedError{Message: "family membership required"})
+				log.Println("RequireFamily: family membership required")
+				return errors.RespondWithError(c, &errors.ForbiddenError{Message: "family membership required"})
 			}
 
 			return next(c)
@@ -147,7 +162,7 @@ func RequireRole(requiredRole Role) echo.MiddlewareFunc {
 			role, ok := GetRoleFromContext(ctx)
 
 			if !ok || role != requiredRole {
-				return echo.NewHTTPError(http.StatusForbidden, "insufficient permissions")
+				return errors.RespondWithError(c, &errors.ForbiddenError{Message: "insufficient permissions"})
 			}
 
 			return next(c)

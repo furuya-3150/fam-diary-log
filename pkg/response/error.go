@@ -1,6 +1,8 @@
 package response
 
 import (
+	"log"
+
 	"github.com/labstack/echo/v4"
 )
 
@@ -10,6 +12,7 @@ type ErrorResponse struct {
 }
 
 func RespondError(c echo.Context, statusCode int, code, message string) error {
+	log.Println("Responding with error:", statusCode, code, message)
 	return c.JSON(statusCode, ErrorResponse{
 		Code:    code,
 		Message: message,

@@ -9,7 +9,6 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
-	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 )
@@ -87,18 +86,14 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 		slog.Error("failed to clear OAuth state from session", "Error", err)
 	}
 
-	isJoined, token, err := h.authController.HandleGoogleCallback(c.Request().Context(), code)
+	_, token, err := h.authController.HandleGoogleCallback(c.Request().Context(), code)
 	if err != nil {
 		return errors.RespondWithError(c, err)
-	}
-	cookieName := auth.AuthCookieName
-	if isJoined {
-		cookieName = auth.FamilyCookieName
 	}
 
 	// Set access token in HTTPOnly Cookie
 	accessTokenCookie := &http.Cookie{
-		Name:     cookieName,
+		Name:     auth.AuthCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,                          // JavaScriptからアクセス不可（XSS対策）
@@ -114,5 +109,5 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 		slog.Error("failed to delete session", "Error", err)
 	}
 
-	return response.RespondSuccess(c, http.StatusNoContent, nil)
+	return c.Redirect(http.StatusTemporaryRedirect, config.Cfg.ClientApp.URL)
 }
