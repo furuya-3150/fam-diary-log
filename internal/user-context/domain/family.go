@@ -42,30 +42,12 @@ type FamilyMember struct {
 }
 
 type FamilyInvitation struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	FamilyID        uuid.UUID  `gorm:"type:uuid;not null;index"`
-	InviterUserID   uuid.UUID  `gorm:"type:uuid;not null"`
-	InvitationToken string     `gorm:"type:varchar(255);not null;uniqueIndex"`
-	ExpiresAt       time.Time  `gorm:"not null"`
-	CreatedAt       time.Time  `gorm:"autoCreateTime"`
-	UpdatedAt       time.Time  `gorm:"autoUpdateTime"`
+	ID              uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	FamilyID        uuid.UUID `gorm:"type:uuid;not null;index"`
+	InviterUserID   uuid.UUID `gorm:"type:uuid;not null"`
+	InvitationToken string    `gorm:"type:varchar(255);not null;uniqueIndex"`
+	InvitedEmails   []string  `gorm:"serializer:json;type:jsonb;not null;default:'[]'"` // 招待対象者のメールアドレスリスト
+	ExpiresAt       time.Time `gorm:"not null"`
+	CreatedAt       time.Time `gorm:"autoCreateTime"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime"`
 }
-
-type FamilyJoinRequest struct {
-	ID              uuid.UUID  `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	FamilyID        uuid.UUID  `gorm:"type:uuid;not null;index"`
-	UserID          uuid.UUID  `gorm:"type:uuid;not null;index"`
-	Status          JoinRequestStatus `gorm:"type:int;not null"`
-	RespondedUserID uuid.UUID `gorm:"type:uuid"`
-	RespondedAt     time.Time `gorm:""`
-	CreatedAt       time.Time  `gorm:"autoCreateTime"`
-	UpdatedAt       time.Time  `gorm:"autoUpdateTime"`
-}
-
-type JoinRequestStatus int
-
-const (
-	JoinRequestStatusPending JoinRequestStatus = iota
-	JoinRequestStatusApproved
-	JoinRequestStatusRejected
-)

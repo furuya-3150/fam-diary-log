@@ -11,7 +11,6 @@ import (
 	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/oauth"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
-	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/ws"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
@@ -31,7 +30,6 @@ func NewRouter() *echo.Echo {
 	familyRepo := repository.NewFamilyRepository(dbManager)
 	familyInvitationRepo := repository.NewFamilyInvitationRepository(dbManager)
 	familyMemberRepo := repository.NewFamilyMemberRepository(dbManager)
-	familyJoinRequestRepo := repository.NewFamilyJoinRequestRepository(dbManager)
 	// token generator (infra) for signing JWTs
 	tokenGenerator := jwtgen.NewTokenGenerator(&clock.Real{})
 
@@ -56,12 +54,7 @@ func NewRouter() *echo.Echo {
 	// mail broker publisher
 	pub := broker.NewDiaryMailerPublisher(slog.Default())
 
-	// WebSocket hub
-	hub := ws.NewHub()
-	// Run the hub
-	go hub.Run()
-	wsHandler := ws.NewWSHandler(hub)
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, familyJoinRequestRepo, authRepo, txManager, &clock.Real{}, tokenGenerator, hub, pub)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, authRepo, txManager, &clock.Real{}, tokenGenerator, pub)
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController, familyUsecase)
 
@@ -103,11 +96,6 @@ func NewRouter() *echo.Echo {
 	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
 	families.POST("/me/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 	families.POST("/join-requests", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
-	families.PATCH("/me/join-requests/:id", familyHandler.RespondToJoinRequest, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
-	families.POST("/:family_id/activate", familyHandler.ActivateFamilyContext, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
-
-	// WebSocket route
-	e.GET("/ws", wsHandler.Handle, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
 
 	// Notification settings routes
 	notifications := e.Group("/families/me/settings")

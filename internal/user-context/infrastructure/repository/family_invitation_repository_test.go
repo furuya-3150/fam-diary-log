@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -131,6 +132,7 @@ func TestFamilyInvitationRepository_UpdateInvitationTokenAndExpires_Success(t *t
 		FamilyID:        familyID,
 		InviterUserID:   inviterID,
 		InvitationToken: token,
+		InvitedEmails:   []string{"test@example.com"},
 		ExpiresAt:       expiresAt,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
@@ -139,13 +141,17 @@ func TestFamilyInvitationRepository_UpdateInvitationTokenAndExpires_Success(t *t
 
 	newToken := "updated-token"
 	newExpires := time.Now().Add(48 * time.Hour)
-	require.NoError(t, deps.Repo.UpdateInvitationTokenAndExpires(ctx, familyID, inviterID, newToken, newExpires))
+	newEmails := []string{"updated@example.com"}
+	newEmailsJSON, err := json.Marshal(newEmails)
+	require.NoError(t, err)
+	require.NoError(t, deps.Repo.UpdateInvitationTokenAndExpires(ctx, familyID, inviterID, newToken, newExpires, newEmailsJSON))
 
 	got, err := deps.Repo.FindInvitationByFamilyID(ctx, familyID)
 	require.NoError(t, err)
 	require.NotNil(t, got)
 	assert.Equal(t, newToken, got.InvitationToken)
 	assert.WithinDuration(t, newExpires, got.ExpiresAt, time.Second)
+	assert.Equal(t, newEmails, got.InvitedEmails)
 }
 
 func TestFamilyInvitationRepository_UpdateInvitationTokenAndExpires_NoMatch(t *testing.T) {
@@ -156,7 +162,9 @@ func TestFamilyInvitationRepository_UpdateInvitationTokenAndExpires_NoMatch(t *t
 	inviterID := uuid.New()
 
 	// 更新対象が存在しない場合でもエラーにならない実装のため、更新後に取得してnilであることを確認
-	err := deps.Repo.UpdateInvitationTokenAndExpires(ctx, familyID, inviterID, "token", time.Now().Add(24*time.Hour))
+	emailsJSON, err := json.Marshal([]string{"test@example.com"})
+	require.NoError(t, err)
+	err = deps.Repo.UpdateInvitationTokenAndExpires(ctx, familyID, inviterID, "token", time.Now().Add(24*time.Hour), emailsJSON)
 	require.NoError(t, err)
 
 	got, err := deps.Repo.FindInvitationByFamilyID(ctx, familyID)

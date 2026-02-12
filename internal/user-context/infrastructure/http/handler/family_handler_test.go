@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	controller_dto "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
@@ -38,18 +37,11 @@ func (m *MockFamilyController) InviteMembers(ctx context.Context, req *controlle
 	return args.Error(0)
 }
 
-func (m *MockFamilyController) ApplyToFamily(ctx context.Context, req *controller_dto.ApplyRequest, userID uuid.UUID) error {
+func (m *MockFamilyController) ApplyToFamily(ctx context.Context, req *controller_dto.ApplyRequest, userID uuid.UUID) (string, error) {
 	args := m.Called(ctx, req, userID)
-	return args.Error(0)
-}
-
-func (m *MockFamilyController) RespondToJoinRequest(ctx context.Context, req *controller_dto.RespondJoinRequestRequest, userID uuid.UUID) error {
-	args := m.Called(ctx, req, userID)
-	return args.Error(0)
-}
-
-func (m *MockFamilyController) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
-	args := m.Called(ctx, userID, familyID)
+	if args.Get(0) == nil {
+		return "", args.Error(1)
+	}
 	return args.String(0), args.Error(1)
 }
 
@@ -66,18 +58,14 @@ func (m *MockFamilyControllerForHandler) InviteMembers(ctx context.Context, req 
 	args := m.Called(ctx, req)
 	return args.Error(0)
 }
-func (m *MockFamilyControllerForHandler) ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) error {
-	args := m.Called(ctx, req, userID)
-	return args.Error(0)
-}
-func (m *MockFamilyControllerForHandler) RespondToJoinRequest(ctx context.Context, req *dto.RespondJoinRequestRequest, userID uuid.UUID) error {
-	args := m.Called(ctx, req, userID)
-	return args.Error(0)
-}
-func (m *MockFamilyControllerForHandler) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
-	args := m.Called(ctx, userID, familyID)
-	return args.String(0), args.Error(1)
-}
+
+// func (m *MockFamilyControllerForHandler) ApplyToFamily(ctx context.Context, req *dto.ApplyRequest, userID uuid.UUID) (string, error) {
+// 	args := m.Called(ctx, req, userID)
+// 	if args.Get(0) == nil {
+// 		return "", args.Error(1)
+// 	}
+// 	return args.String(0), args.Error(1)
+// }
 
 type MockFamilyUsecase struct {
 	mock.Mock
@@ -96,22 +84,12 @@ func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.Invite
 	return args.Error(0)
 }
 
-func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error {
+func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) (string, error) {
 	args := m.Called(ctx, token, userID)
-	return args.Error(0)
-}
-
-func (m *MockFamilyUsecase) RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error {
-	args := m.Called(ctx, requestID, status, responderUserID)
-	return args.Error(0)
-}
-
-func (m *MockFamilyUsecase) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
-	args := m.Called(ctx, userID, familyID)
-	if args.Get(0) == nil {
+	if args.Get(0) == "" {
 		return "", args.Error(1)
 	}
-	return args.String(0), args.Error(1)
+	return args.Get(0).(string), args.Error(1)
 }
 
 func TestFamilyHandler_CreateFamily_Success(t *testing.T) {
@@ -133,16 +111,25 @@ func TestFamilyHandler_CreateFamily_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userId)
 	c.SetRequest(req.WithContext(ctx))
 
-	// expected := &dto.FamilyResponse{
-	// 	ID:   uuid.New(),
-	// 	Name: reqBody.Name,
-	// }
-	// mockController.On("CreateFamily", mock.Anything, reqBody.Name, userId).Return(expected, nil)
-	mockUsecase.On("CreateFamily", mock.Anything, mock.Anything, mock.Anything).Return("token", nil)
+	mockUsecase.On("CreateFamily", mock.Anything, mock.Anything, mock.Anything).Return("test-token-123", nil)
 
 	err := h.CreateFamily(c)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	// Cookie検証
+	cookies := rec.Result().Cookies()
+	require.NotEmpty(t, cookies)
+	found := false
+	for _, ck := range cookies {
+		if ck.Name == auth.AuthCookieName {
+			found = true
+			require.Equal(t, "test-token-123", ck.Value)
+			require.Equal(t, "/", ck.Path)
+			require.True(t, ck.HttpOnly)
+		}
+	}
+	require.True(t, found, "Auth cookie not found")
 }
 
 func TestFamilyHandler_CreateFamily_Error(t *testing.T) {
@@ -171,6 +158,30 @@ func TestFamilyHandler_CreateFamily_Error(t *testing.T) {
 	err := h.CreateFamily(c)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
+}
+
+func TestFamilyHandler_CreateFamily_BadRequest_NoUser(t *testing.T) {
+	e := echo.New()
+	mockController := new(MockFamilyControllerForHandler)
+	mockUsecase := new(MockFamilyUsecase)
+	h := &familyHandler{
+		fc: mockController,
+		fu: mockUsecase,
+	}
+
+	reqBody := &controller_dto.CreateFamilyRequest{
+		Name: "TestFamily",
+	}
+	b, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/families", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// UserIDなし
+	err := h.CreateFamily(c)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestFamilyHandler_InviteMembers_Success(t *testing.T) {
@@ -205,7 +216,7 @@ func TestFamilyHandler_InviteMembers_Success(t *testing.T) {
 	mockController.AssertExpectations(t)
 }
 
-func TestFamilyHandler_InviteMembers_BadRequest(t *testing.T) {
+func TestFamilyHandler_InviteMembers_BadRequest_InvalidEmail(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockFamilyController)
 	h := &familyHandler{
@@ -232,12 +243,64 @@ func TestFamilyHandler_InviteMembers_BadRequest(t *testing.T) {
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestFamilyHandler_ApplyToFamily_Success(t *testing.T) {
+func TestFamilyHandler_InviteMembers_BadRequest_NoFamilyID(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockFamilyControllerForHandler)
 	h := &familyHandler{
 		fc: mockController,
 		fu: new(MockFamilyUsecase),
+	}
+
+	reqBody := &controller_dto.InviteMembersRequest{
+		Emails: []string{"test@example.com"},
+	}
+	b, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/families/invitations", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// FamilyIDなし、UserIDのみ
+	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, uuid.New())
+	c.SetRequest(req.WithContext(ctx))
+
+	err := h.InviteMembers(c)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestFamilyHandler_InviteMembers_BadRequest_NoUserID(t *testing.T) {
+	e := echo.New()
+	mockController := new(MockFamilyControllerForHandler)
+	h := &familyHandler{
+		fc: mockController,
+		fu: new(MockFamilyUsecase),
+	}
+
+	reqBody := &controller_dto.InviteMembersRequest{
+		Emails: []string{"test@example.com"},
+	}
+	b, _ := json.Marshal(reqBody)
+	req := httptest.NewRequest(http.MethodPost, "/families/invitations", bytes.NewReader(b))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	// UserIDなし、FamilyIDのみ
+	ctx := context.WithValue(context.Background(), auth.ContextKeyFamilyID, uuid.New())
+	c.SetRequest(req.WithContext(ctx))
+
+	err := h.InviteMembers(c)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestFamilyHandler_ApplyToFamily_Success(t *testing.T) {
+	e := echo.New()
+	mockUsecase := new(MockFamilyUsecase)
+	h := &familyHandler{
+		fc: new(MockFamilyControllerForHandler),
+		fu: mockUsecase,
 	}
 
 	userID := uuid.New()
@@ -252,11 +315,11 @@ func TestFamilyHandler_ApplyToFamily_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
 	c.SetRequest(req.WithContext(ctx))
 
-	mockController.On("ApplyToFamily", mock.Anything, mock.AnythingOfType("*dto.ApplyRequest"), mock.AnythingOfType("uuid.UUID")).Return(nil)
+	mockUsecase.On("ApplyToFamily", mock.Anything, "tok-123", userID).Return("test-token", nil)
 
 	_ = h.ApplyToFamily(c)
 	require.Equal(t, http.StatusNoContent, rec.Code)
-	mockController.AssertExpectations(t)
+	mockUsecase.AssertExpectations(t)
 }
 
 func TestFamilyHandler_ApplyToFamily_BadRequest_NoToken(t *testing.T) {
@@ -284,10 +347,10 @@ func TestFamilyHandler_ApplyToFamily_BadRequest_NoToken(t *testing.T) {
 
 func TestFamilyHandler_ApplyToFamily_ControllerError(t *testing.T) {
 	e := echo.New()
-	mockController := new(MockFamilyControllerForHandler)
+	mockUsecase := new(MockFamilyUsecase)
 	h := &familyHandler{
-		fc: mockController,
-		fu: new(MockFamilyUsecase),
+		fc: new(MockFamilyControllerForHandler),
+		fu: mockUsecase,
 	}
 
 	userID := uuid.New()
@@ -302,174 +365,70 @@ func TestFamilyHandler_ApplyToFamily_ControllerError(t *testing.T) {
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
 	c.SetRequest(req.WithContext(ctx))
 
-	mockController.On("ApplyToFamily", mock.Anything, mock.AnythingOfType("*dto.ApplyRequest"), mock.AnythingOfType("uuid.UUID")).Return(assert.AnError)
+	mockUsecase.On("ApplyToFamily", mock.Anything, "tok-err", userID).Return("", assert.AnError)
 
 	_ = h.ApplyToFamily(c)
 	require.Equal(t, http.StatusInternalServerError, rec.Code)
-	mockController.AssertExpectations(t)
+	mockUsecase.AssertExpectations(t)
 }
 
-func TestFamilyHandler_RespondToJoinRequest_Success(t *testing.T) {
+func TestFamilyHandler_ApplyToFamily_BadRequest_NoUserID(t *testing.T) {
 	e := echo.New()
-	mockController := new(MockFamilyControllerForHandler)
 	h := &familyHandler{
-		fc: mockController,
+		fc: new(MockFamilyControllerForHandler),
 		fu: new(MockFamilyUsecase),
 	}
 
-	userID := uuid.New()
-	requestID := uuid.New()
-	reqBody := &controller_dto.RespondJoinRequestRequest{
-		Status: int(domain.JoinRequestStatusApproved),
-	}
+	reqBody := &controller_dto.ApplyRequest{Token: "tok-123"}
 	b, _ := json.Marshal(reqBody)
-	url := "/families/me/join-requests/" + requestID.String()
-	req := httptest.NewRequest(http.MethodPatch, url, bytes.NewReader(b))
+	req := httptest.NewRequest(http.MethodPost, "/invitations/apply", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(requestID.String())
 
-	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
-	c.SetRequest(req.WithContext(ctx))
-
-	mockController.On("RespondToJoinRequest", mock.Anything, mock.AnythingOfType("*dto.RespondJoinRequestRequest"), mock.AnythingOfType("uuid.UUID")).Return(nil)
-
-	_ = h.RespondToJoinRequest(c)
-	require.Equal(t, http.StatusNoContent, rec.Code)
-	mockController.AssertExpectations(t)
-}
-
-func TestFamilyHandler_RespondToJoinRequest_BadRequest_NoUser(t *testing.T) {
-	// e := echo.New()
-	mockController := new(MockFamilyControllerForHandler)
-	h := &familyHandler{
-		fc: mockController,
-		fu: new(MockFamilyUsecase),
-	}
-
-	requestID := uuid.New()
-	reqBody := &controller_dto.RespondJoinRequestRequest{
-		Status: int(domain.JoinRequestStatusApproved),
-	}
-	b, _ := json.Marshal(reqBody)
-	url := "/families/me/join-requests/" + requestID.String()
-	req := httptest.NewRequest(http.MethodPatch, url, bytes.NewReader(b))
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-	c.SetParamNames("id")
-	c.SetParamValues(requestID.String())
-
-	// no user_id in context
-	_ = h.RespondToJoinRequest(c)
+	// UserIDなし
+	err := h.ApplyToFamily(c)
+	require.NoError(t, err)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
-func TestFamilyHandler_RespondToJoinRequest_ControllerError(t *testing.T) {
+func TestFamilyHandler_ApplyToFamily_Success_WithCookie(t *testing.T) {
 	e := echo.New()
-	mockController := new(MockFamilyControllerForHandler)
+	mockUsecase := new(MockFamilyUsecase)
 	h := &familyHandler{
-		fc: mockController,
-		fu: new(MockFamilyUsecase),
+		fc: new(MockFamilyControllerForHandler),
+		fu: mockUsecase,
 	}
 
 	userID := uuid.New()
-	reqBody := &controller_dto.RespondJoinRequestRequest{
-		ID:     uuid.New(),
-		Status: int(domain.JoinRequestStatusRejected),
-	}
+	reqBody := &controller_dto.ApplyRequest{Token: "tok-123"}
 	b, _ := json.Marshal(reqBody)
-	url := "/families/me/join-requests/" + reqBody.ID.String()
-	req := httptest.NewRequest(http.MethodPatch, url, bytes.NewReader(b))
+	req := httptest.NewRequest(http.MethodPost, "/invitations/apply", bytes.NewReader(b))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
 	c.SetRequest(req.WithContext(ctx))
-	c.SetParamNames("id")
-	c.SetParamValues(reqBody.ID.String())
 
-	mockController.On("RespondToJoinRequest", mock.Anything, mock.AnythingOfType("*dto.RespondJoinRequestRequest"), mock.AnythingOfType("uuid.UUID")).Return(assert.AnError)
+	mockUsecase.On("ApplyToFamily", mock.Anything, "tok-123", userID).Return("family-token-456", nil)
 
-	_ = h.RespondToJoinRequest(c)
-	require.Equal(t, http.StatusInternalServerError, rec.Code)
-	mockController.AssertExpectations(t)
-}
-
-func TestFamilyHandler_ActivateFamilyContext_SetsCookie_Success(t *testing.T) {
-	// e := echo.New()
-	mc := new(MockFamilyControllerForHandler)
-	h := NewFamilyHandler(mc, new(MockFamilyUsecase))
-
-	userID := uuid.New()
-	familyID := uuid.New()
-	token := "signed-token"
-
-	req := httptest.NewRequest(http.MethodPost, "/families/"+familyID.String()+"/activate", nil)
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-	c.SetParamNames("family_id")
-	c.SetParamValues(familyID.String())
-	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
-	c.SetRequest(req.WithContext(ctx))
-
-	mc.On("ActivateFamilyContext", mock.Anything, userID, familyID).Return(token, nil)
-
-	err := h.ActivateFamilyContext(c)
+	err := h.ApplyToFamily(c)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	// Cookie検証
 	cookies := rec.Result().Cookies()
 	require.NotEmpty(t, cookies)
 	found := false
 	for _, ck := range cookies {
 		if ck.Name == auth.AuthCookieName {
 			found = true
-			require.Equal(t, token, ck.Value)
+			require.Equal(t, "family-token-456", ck.Value)
 			require.Equal(t, "/", ck.Path)
+			require.True(t, ck.HttpOnly)
 		}
 	}
-	require.True(t, found)
-}
-
-func TestFamilyHandler_ActivateFamilyContext_BadRequest_NoUser(t *testing.T) {
-	// e := echo.New()
-	mc := new(MockFamilyControllerForHandler)
-	h := NewFamilyHandler(mc, new(MockFamilyUsecase))
-
-	familyID := uuid.New()
-
-	req := httptest.NewRequest(http.MethodPost, "/families/"+familyID.String()+"/activate", nil)
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-	c.SetParamNames("family_id")
-	c.SetParamValues(familyID.String())
-	// no user_id in context
-	err := h.ActivateFamilyContext(c)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-}
-
-func TestFamilyHandler_ActivateFamilyContext_UsecaseError(t *testing.T) {
-	// e := echo.New()
-	mc := new(MockFamilyControllerForHandler)
-	h := NewFamilyHandler(mc, new(MockFamilyUsecase))
-
-	userID := uuid.New()
-	familyID := uuid.New()
-
-	req := httptest.NewRequest(http.MethodPost, "/families/"+familyID.String()+"/activate", nil)
-	rec := httptest.NewRecorder()
-	c := echo.New().NewContext(req, rec)
-	c.SetParamNames("family_id")
-	c.SetParamValues(familyID.String())
-	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userID)
-	c.SetRequest(req.WithContext(ctx))
-
-	mc.On("ActivateFamilyContext", mock.Anything, userID, familyID).Return("", errors.New("failed"))
-
-	err := h.ActivateFamilyContext(c)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusInternalServerError, rec.Code)
+	require.True(t, found, "Auth cookie not found")
+	mockUsecase.AssertExpectations(t)
 }

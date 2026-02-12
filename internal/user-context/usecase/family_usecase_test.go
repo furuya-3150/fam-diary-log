@@ -2,13 +2,13 @@ package usecase
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/pkg/clock"
-	apperrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/furuya-3150/fam-diary-log/pkg/events"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -58,8 +58,8 @@ func (m *MockFamilyInvitationRepository) CreateInvitation(ctx context.Context, i
 	return args.Error(0)
 }
 
-func (m *MockFamilyInvitationRepository) UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time) error {
-	args := m.Called(ctx, familyID, inviterUserID, token, expiresAt)
+func (m *MockFamilyInvitationRepository) UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time, invitedEmailsJSON json.RawMessage) error {
+	args := m.Called(ctx, familyID, inviterUserID, token, expiresAt, invitedEmailsJSON)
 	return args.Error(0)
 }
 
@@ -77,42 +77,6 @@ func (m *MockFamilyInvitationRepository) FindInvitationByToken(ctx context.Conte
 		return nil, args.Error(1)
 	}
 	return args.Get(0).(*domain.FamilyInvitation), args.Error(1)
-}
-
-type MockFamilyJoinRequestRepository struct{ mock.Mock }
-
-func (m *MockFamilyJoinRequestRepository) CreateJoinRequest(ctx context.Context, req *domain.FamilyJoinRequest) error {
-	args := m.Called(ctx, req)
-	return args.Error(0)
-}
-
-func (m *MockFamilyJoinRequestRepository) FindPendingRequest(ctx context.Context, familyID, userID uuid.UUID) (*domain.FamilyJoinRequest, error) {
-	args := m.Called(ctx, familyID, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.FamilyJoinRequest), args.Error(1)
-}
-
-func (m *MockFamilyJoinRequestRepository) FindByID(ctx context.Context, id uuid.UUID) (*domain.FamilyJoinRequest, error) {
-	args := m.Called(ctx, id)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.FamilyJoinRequest), args.Error(1)
-}
-
-func (m *MockFamilyJoinRequestRepository) UpdateStatusByID(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
-	args := m.Called(ctx, id, updates)
-	return args.Error(0)
-}
-
-func (m *MockFamilyJoinRequestRepository) FindApprovedByUser(ctx context.Context, userID uuid.UUID) (*domain.FamilyJoinRequest, error) {
-	args := m.Called(ctx, userID)
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*domain.FamilyJoinRequest), args.Error(1)
 }
 
 type MockTxManager struct{ mock.Mock }
@@ -155,12 +119,29 @@ func (m *MockMailPublisher) Close() error {
 	return args.Error(0)
 }
 
+type MockTokenGen struct{ mock.Mock }
+
+func (m *MockTokenGen) GenerateToken(ctx context.Context, userID uuid.UUID, familyID uuid.UUID, role domain.Role) (string, error) {
+	args := m.Called(ctx, userID, familyID, role)
+	return args.String(0), args.Error(1)
+}
+
+type MockPublisher struct{ mock.Mock }
+
+func (m *MockPublisher) Publish(ctx context.Context, userID uuid.UUID, payload interface{}) error {
+	args := m.Called(ctx, userID, payload)
+	return args.Error(0)
+}
+
+func (m *MockPublisher) CloseUserConnections(userID uuid.UUID) {
+	m.Called(userID)
+}
+
 // newTestEnv centralizes mock creation and usecase instantiation for tests
 func newTestEnv() (context.Context,
 	*MockFamilyRepo,
 	*MockFamilyMemberRepo,
 	*MockFamilyInvitationRepository,
-	*MockFamilyJoinRequestRepository,
 	*MockUserRepository,
 	*MockTxManager,
 	*MockTokenGen,
@@ -171,21 +152,20 @@ func newTestEnv() (context.Context,
 	fr := new(MockFamilyRepo)
 	fmr := new(MockFamilyMemberRepo)
 	fir := new(MockFamilyInvitationRepository)
-	tjr := new(MockFamilyJoinRequestRepository)
 	ur := new(MockUserRepository)
 	tm := new(MockTxManager)
 	tg := new(MockTokenGen)
 	wsp := new(MockWSPblisher)
 	mp := new(MockMailPublisher)
 
-	u := NewFamilyUsecase(fr, fmr, fir, tjr, ur, tm, &clock.Fixed{}, tg, wsp, mp)
+	u := NewFamilyUsecase(fr, fmr, fir, ur, tm, &clock.Fixed{}, tg, mp)
 	ctx := context.Background()
 
-	return ctx, fr, fmr, fir, tjr, ur, tm, tg, wsp, mp, u
+	return ctx, fr, fmr, fir, ur, tm, tg, wsp, mp, u
 }
 
 func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
-	ctx, fr, fmr, _, _, _, tm, tg, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, tg, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -205,7 +185,7 @@ func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
 }
 
 func TestFamilyUsecase_CreateFamily_AlreadyMember(t *testing.T) {
-	ctx, _, fmr, _, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(true, nil)
@@ -215,7 +195,7 @@ func TestFamilyUsecase_CreateFamily_AlreadyMember(t *testing.T) {
 }
 
 func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
-	ctx, fr, fmr, _, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -228,7 +208,7 @@ func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
 }
 
 func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
-	ctx, fr, fmr, _, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -242,8 +222,25 @@ func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFamilyUsecase_CreateFamily_TokenGenerationError(t *testing.T) {
+	ctx, fr, fmr, _, _, tm, tg, _, _, u := newTestEnv()
+	userID := uuid.New()
+
+	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
+	tm.On("BeginTx", ctx).Return(ctx, nil)
+	family := &domain.Family{ID: uuid.New(), Name: "TestFamily"}
+	fr.On("CreateFamily", ctx, mock.AnythingOfType("*domain.Family")).Return(family, nil)
+	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
+	tm.On("CommitTx", ctx).Return(nil)
+	tg.On("GenerateToken", ctx, mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("token generation error"))
+
+	_, err := u.CreateFamily(ctx, "TestFamily", userID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "token generation error")
+}
+
 func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
-	ctx, fr, _, fir, _, ur, _, _, _, mp, u := newTestEnv()
+	ctx, fr, _, fir, ur, _, _, _, mp, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -265,13 +262,13 @@ func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 
 // InviteMembers: 正常系 - 既存更新
 func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
-	ctx, fr, _, fir, _, ur, _, _, _, mp, u := newTestEnv()
+	ctx, fr, _, fir, ur, _, _, _, mp, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
 	existing := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InviterUserID: inviterID, InvitationToken: "old", ExpiresAt: time.Now()}
 	fir.On("FindInvitationByFamilyID", mock.Anything, familyID).Return(existing, nil)
-	fir.On("UpdateInvitationTokenAndExpires", mock.Anything, familyID, inviterID, mock.AnythingOfType("string"), mock.Anything).Return(nil)
+	fir.On("UpdateInvitationTokenAndExpires", mock.Anything, familyID, inviterID, mock.AnythingOfType("string"), mock.Anything, mock.AnythingOfType("json.RawMessage")).Return(nil)
 	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
 	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
@@ -287,7 +284,7 @@ func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
 
 // InviteMembers: 異常系 - Findでエラー
 func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -299,7 +296,7 @@ func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
 
 // InviteMembers: 異常系 - Createでエラー
 func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -312,254 +309,212 @@ func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
 
 // InviteMembers: 異常系 - Updateでエラー
 func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
 	existing := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InviterUserID: inviterID, InvitationToken: "old", ExpiresAt: time.Now()}
 	fir.On("FindInvitationByFamilyID", mock.Anything, familyID).Return(existing, nil)
-	fir.On("UpdateInvitationTokenAndExpires", mock.Anything, familyID, inviterID, mock.AnythingOfType("string"), mock.Anything).Return(errors.New("update error"))
+	fir.On("UpdateInvitationTokenAndExpires", mock.Anything, familyID, inviterID, mock.AnythingOfType("string"), mock.Anything, mock.AnythingOfType("json.RawMessage")).Return(errors.New("update error"))
 
 	err := u.InviteMembers(ctx, InviteMembersInput{FamilyID: familyID, InviterUserID: inviterID, Emails: []string{"a@example.com"}})
 	require.Error(t, err)
 }
 
 func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
-	ctx, _, fmr, fir, tjr, ur, _, _, _, mp, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, tg, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-123"
 	familyID := uuid.New()
+	userEmail := "user@example.com"
 
-	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		InvitationToken: token,
+		InvitedEmails:   []string{userEmail}, // User's email is in the invited list
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
+	}
 	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
 	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
-	tjr.On("FindPendingRequest", mock.Anything, familyID, userID).Return(nil, nil)
-	tjr.On("CreateJoinRequest", mock.Anything, mock.AnythingOfType("*domain.FamilyJoinRequest")).Return(nil)
-	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
-	mp.On("Close").Return(nil)
-	ur.On("GetAdminUsersByFamilyID", mock.Anything, familyID).Return([]*domain.User{
-		{ID: uuid.New(), Email: "admin@example.com"},
-	}, nil)
-	ur.On("GetUserByID", mock.Anything, userID).Return(&domain.User{ID: userID, Email: "user@example.com"}, nil)
+	ur.On("GetUserByID", mock.Anything, userID).Return(&domain.User{ID: userID, Email: userEmail}, nil)
+	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
+	tg.On("GenerateToken", ctx, userID, familyID, mock.Anything).Return("test-token", nil)
 
-	// fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
+	signed, err := u.ApplyToFamily(ctx, token, userID)
 
-	err := u.ApplyToFamily(ctx, token, userID)
+	require.NotEmpty(t, signed)
 	require.NoError(t, err)
 	fir.AssertExpectations(t)
 	fmr.AssertExpectations(t)
-	tjr.AssertExpectations(t)
-	mp.AssertExpectations(t)
 	ur.AssertExpectations(t)
+	tg.AssertExpectations(t)
 }
 
 func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-404"
 
 	fir.On("FindInvitationByToken", mock.Anything, token).Return(nil, nil)
 
-	err := u.ApplyToFamily(ctx, token, userID)
+	_, err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "invitation not found")
+	require.Contains(t, err.Error(), "invalid invitation token")
 }
 
 func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-err"
 
 	fir.On("FindInvitationByToken", mock.Anything, token).Return(nil, errors.New("db error"))
 
-	err := u.ApplyToFamily(ctx, token, userID)
+	_, err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
 }
 
 func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
-	ctx, _, fmr, fir, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-exist"
 	familyID := uuid.New()
 
-	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		InvitationToken: token,
+		InvitedEmails:   []string{"user@example.com"},
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
+	}
 	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
 	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(true, nil)
 
-	err := u.ApplyToFamily(ctx, token, userID)
+	_, err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "already a member")
 }
 
+func TestFamilyUsecase_ApplyToFamily_EmailNotInvited(t *testing.T) {
+	ctx, _, fmr, fir, ur, _, _, _, _, u := newTestEnv()
+	userID := uuid.New()
+	token := "tok-not-invited"
+	familyID := uuid.New()
+
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		InvitationToken: token,
+		InvitedEmails:   []string{"invited@example.com"}, // Different email
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
+	}
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
+	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
+	ur.On("GetUserByID", mock.Anything, userID).Return(&domain.User{ID: userID, Email: "user@example.com"}, nil)
+
+	_, err := u.ApplyToFamily(ctx, token, userID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "not invited")
+}
+
 func TestFamilyUsecase_ApplyToFamily_AddMemberError(t *testing.T) {
-	ctx, _, fmr, fir, tjr, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-add-err"
 	familyID := uuid.New()
+	userEmail := "user@example.com"
 
-	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		InvitationToken: token,
+		InvitedEmails:   []string{userEmail},
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
+	}
 	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
 	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
-	tjr.On("FindPendingRequest", mock.Anything, familyID, userID).Return(nil, nil)
-	tjr.On("CreateJoinRequest", mock.Anything, mock.AnythingOfType("*domain.FamilyJoinRequest")).Return(errors.New("create error"))
+	ur.On("GetUserByID", mock.Anything, userID).Return(&domain.User{ID: userID, Email: userEmail}, nil)
+	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add member error"))
 
-	err := u.ApplyToFamily(ctx, token, userID)
+	_, err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
 }
 
-func TestFamilyUsecase_ApplyToFamily_AlreadyPending(t *testing.T) {
-	ctx, _, fmr, fir, tjr, _, _, _, _, _, u := newTestEnv()
+func TestFamilyUsecase_ApplyToFamily_ExpiredToken(t *testing.T) {
+	// 期限切れをテストするため、固定時刻を設定したClockを使用
+	fr := new(MockFamilyRepo)
+	fmr := new(MockFamilyMemberRepo)
+	fir := new(MockFamilyInvitationRepository)
+	ur := new(MockUserRepository)
+	tm := new(MockTxManager)
+	tg := new(MockTokenGen)
+	mp := new(MockMailPublisher)
+
+	// Clockを2025年1月1日に設定
+	fixedClock := &clock.Fixed{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+	u := NewFamilyUsecase(fr, fmr, fir, ur, tm, fixedClock, tg, mp)
+
+	ctx := context.Background()
 	userID := uuid.New()
-	token := "tok-pending"
-	familyID := uuid.New()
+	token := "tok-expired"
 
-	inv := &domain.FamilyInvitation{ID: uuid.New(), FamilyID: familyID, InvitationToken: token, ExpiresAt: time.Now().Add(24 * time.Hour)}
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        uuid.New(),
+		InvitationToken: token,
+		InvitedEmails:   []string{"user@example.com"},
+		ExpiresAt:       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), // Clockの時刻より古い
+	}
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
+	// 期限切れの場合、IsUserAlreadyMemberは呼ばれない
+
+	_, err := u.ApplyToFamily(ctx, token, userID)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "expired")
+}
+
+func TestFamilyUsecase_ApplyToFamily_TokenGenerationError(t *testing.T) {
+	ctx, _, fmr, fir, ur, _, tg, _, _, u := newTestEnv()
+	userID := uuid.New()
+	token := "tok-123"
+	familyID := uuid.New()
+	userEmail := "user@example.com"
+
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        familyID,
+		InvitationToken: token,
+		InvitedEmails:   []string{userEmail},
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
+	}
 	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
 	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
-	existing := &domain.FamilyJoinRequest{ID: uuid.New(), FamilyID: familyID, UserID: userID, Status: domain.JoinRequestStatusPending}
-	tjr.On("FindPendingRequest", mock.Anything, familyID, userID).Return(existing, nil)
+	ur.On("GetUserByID", mock.Anything, userID).Return(&domain.User{ID: userID, Email: userEmail}, nil)
+	fmr.On("AddFamilyMember", mock.Anything, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
+	tg.On("GenerateToken", ctx, userID, familyID, mock.Anything).Return("", errors.New("token error"))
 
-	err := u.ApplyToFamily(ctx, token, userID)
+	_, err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "pending")
+	require.Contains(t, err.Error(), "token error")
 }
 
-func TestFamilyUsecase_RespondToJoinRequest_SuccessApproved(t *testing.T) {
-	ctx, _, fmr, _, tjr, _, tm, _, wsp, _, u := newTestEnv()
+func TestFamilyUsecase_ApplyToFamily_InvalidUser(t *testing.T) {
+	ctx, _, fmr, fir, ur, _, _, _, _, u := newTestEnv()
+	userID := uuid.New()
+	token := "tok-123"
 
-	requestID := uuid.New()
-	requestUserID := uuid.New()
-	responderID := uuid.New()
-	familyID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:       requestID,
-		FamilyID: familyID,
-		UserID:   requestUserID,
-		Status:   domain.JoinRequestStatusPending,
+	inv := &domain.FamilyInvitation{
+		ID:              uuid.New(),
+		FamilyID:        uuid.New(),
+		InvitationToken: token,
+		InvitedEmails:   []string{"user@example.com"},
+		ExpiresAt:       time.Now().Add(24 * time.Hour),
 	}
+	fir.On("FindInvitationByToken", mock.Anything, token).Return(inv, nil)
+	fmr.On("IsUserAlreadyMember", mock.Anything, userID).Return(false, nil)
+	ur.On("GetUserByID", mock.Anything, userID).Return(nil, nil)
 
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.MatchedBy(func(updates map[string]interface{}) bool {
-		s, ok := updates["status"].(int)
-		if !ok || s != int(domain.JoinRequestStatusApproved) {
-			return false
-		}
-		if _, ok := updates["responded_user_id"].(uuid.UUID); !ok {
-			return false
-		}
-		if _, ok := updates["responded_at"].(time.Time); !ok {
-			return false
-		}
-		return true
-	})).Return(nil)
-
-	// 承認時にメンバー追加
-	fmr.On("IsUserAlreadyMember", mock.Anything, requestUserID).Return(false, nil)
-	fmr.On("AddFamilyMember", mock.Anything, mock.MatchedBy(func(member *domain.FamilyMember) bool {
-		return member.UserID == requestUserID && member.FamilyID == familyID && member.Role == domain.RoleMember
-	})).Return(nil)
-
-	wsp.On("Publish", mock.Anything, requestUserID, mock.Anything).Return(nil)
-	wsp.On("CloseUserConnections", requestUserID).Return()
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
-	require.NoError(t, err)
-
-	tjr.AssertExpectations(t)
-	fmr.AssertExpectations(t)
-	tm.AssertExpectations(t)
-}
-
-func TestFamilyUsecase_RespondToJoinRequest_SuccessRejected_NoAddMember(t *testing.T) {
-	// fr := new(MockFamilyRepo)
-	// fmr := new(MockFamilyMemberRepo)
-	// fir := new(MockFamilyInvitationRepository)
-	// tjr := new(MockFamilyJoinRequestRepository)
-	// tm := new(MockTxManager)
-	// now := time.Now()
-	// tg := new(MockTokenGen)
-	// wsp := new(MockWSPblisher)
-	// mp := new(MockMailPublisher)
-	// u := NewFamilyUsecase(fr, fmr, fir, tjr, tm, &clock.Fixed{Time: now}, tg, wsp, mp)
-	ctx, _, _, _, tjr, _, _, _, wsp, _, u := newTestEnv()
-
-	requestID := uuid.New()
-	responderID := uuid.New()
-	requestUserID := uuid.New()
-	familyID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:       requestID,
-		FamilyID: familyID,
-		UserID:   requestUserID,
-		Status:   domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.MatchedBy(func(updates map[string]interface{}) bool {
-		s, ok := updates["status"].(int)
-		if !ok || s != int(domain.JoinRequestStatusRejected) {
-			return false
-		}
-		return true
-	})).Return(nil)
-	wsp.On("Publish", mock.Anything, requestUserID, mock.Anything).Return(nil)
-	wsp.On("CloseUserConnections", requestUserID).Return()
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
-	require.NoError(t, err)
-
-	tjr.AssertExpectations(t)
-}
-
-func TestFamilyUsecase_RespondToJoinRequest_NotFound(t *testing.T) {
-	ctx, _, _, _, tjr, _, _, _, _, _, u := newTestEnv()
-	requestID := uuid.New()
-	responderID := uuid.New()
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(nil, nil)
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusApproved, responderID)
+	_, err := u.ApplyToFamily(ctx, token, userID)
 	require.Error(t, err)
-	var nf *apperrors.NotFoundError
-	require.ErrorAs(t, err, &nf)
-}
-
-func TestFamilyUsecase_RespondToJoinRequest_BadRequest_WhenNotPending(t *testing.T) {
-	ctx, _, _, _, tjr, _, _, _, _, _, u := newTestEnv()
-	requestID := uuid.New()
-	responderID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:     requestID,
-		Status: domain.JoinRequestStatusApproved,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
-	require.Error(t, err)
-	var br *apperrors.BadRequestError
-	require.ErrorAs(t, err, &br)
-}
-
-func TestFamilyUsecase_RespondToJoinRequest_UpdateError_Rollback(t *testing.T) {
-	ctx, _, _, _, tjr, _, tm, _, wsp, mp, u := newTestEnv()
-	requestID := uuid.New()
-	responderID := uuid.New()
-
-	jr := &domain.FamilyJoinRequest{
-		ID:     requestID,
-		Status: domain.JoinRequestStatusPending,
-	}
-
-	tjr.On("FindByID", mock.Anything, requestID).Return(jr, nil)
-	tjr.On("UpdateStatusByID", mock.Anything, requestID, mock.Anything).Return(errors.New("update failed"))
-
-	err := u.RespondToJoinRequest(ctx, requestID, domain.JoinRequestStatusRejected, responderID)
-	require.Error(t, err)
-	tm.AssertExpectations(t)
-	wsp.AssertExpectations(t)
-	mp.AssertExpectations(t)
+	require.Contains(t, err.Error(), "invalid user")
 }
