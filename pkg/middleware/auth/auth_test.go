@@ -17,17 +17,19 @@ import (
 
 const testSecret = "test-secret-key"
 
-func createTestJWT(userID, familyID uuid.UUID, role string, secret string, expiry time.Duration) (string, error) {
+func createTestJWT(userID, familyID *uuid.UUID, role string, secret string, expiry time.Duration) (string, error) {
 	now := time.Now()
 	claims := jwt.MapClaims{
-		"sub":       userID.String(),
-		"family_id": familyID.String(),
-		"role":      role,
-		"email":     "test@example.com",
-		"provider":  "test",
-		"iat":       now.Unix(),
-		"exp":       now.Add(expiry).Unix(),
-		"iss":       "test-issuer",
+		"sub":      userID.String(),
+		"role":     role,
+		"email":    "test@example.com",
+		"provider": "test",
+		"iat":      now.Unix(),
+		"exp":      now.Add(expiry).Unix(),
+		"iss":      "test-issuer",
+	}
+	if familyID != nil {
+		claims["family_id"] = familyID.String()
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(secret))
@@ -36,7 +38,7 @@ func createTestJWT(userID, familyID uuid.UUID, role string, secret string, expir
 func TestJWTAuthMiddleware_ValidToken(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
-	tokenString, err := createTestJWT(userID, familyID, "admin", testSecret, time.Hour)
+	tokenString, err := createTestJWT(&userID, &familyID, "admin", testSecret, time.Hour)
 	require.NoError(t, err)
 
 	e := echo.New()
@@ -67,7 +69,7 @@ func TestJWTAuthMiddleware_ValidToken(t *testing.T) {
 		return c.String(http.StatusOK, "success")
 	}
 
-	middleware := JWTAuthMiddleware(testSecret, AuthCookieName)
+	middleware := JWTAuthMiddleware(testSecret)
 	h := middleware(handler)
 	err = h(c)
 
@@ -85,7 +87,7 @@ func TestJWTAuthMiddleware_MissingCookie_Required(t *testing.T) {
 		return c.String(http.StatusOK, "success")
 	}
 
-	middleware := JWTAuthMiddleware(testSecret, "hoge")
+	middleware := JWTAuthMiddleware(testSecret)
 	h := middleware(handler)
 	err := h(c)
 	log.Println("err:", err)
@@ -115,7 +117,7 @@ func TestJWTAuthMiddleware_InvalidToken(t *testing.T) {
 		return c.String(http.StatusOK, "success")
 	}
 
-	middleware := JWTAuthMiddleware(testSecret, AuthCookieName)
+	middleware := JWTAuthMiddleware(testSecret)
 	h := middleware(handler)
 	err := h(c)
 
@@ -134,7 +136,7 @@ func TestJWTAuthMiddleware_ExpiredToken(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
 	// Create token that expired 1 hour ago
-	tokenString, err := createTestJWT(userID, familyID, "member", testSecret, -time.Hour)
+	tokenString, err := createTestJWT(&userID, &familyID, "member", testSecret, -time.Hour)
 	require.NoError(t, err)
 
 	e := echo.New()
@@ -150,7 +152,7 @@ func TestJWTAuthMiddleware_ExpiredToken(t *testing.T) {
 		return c.String(http.StatusOK, "success")
 	}
 
-	middleware := JWTAuthMiddleware(testSecret, AuthCookieName)
+	middleware := JWTAuthMiddleware(testSecret)
 	h := middleware(handler)
 	err = h(c)
 
@@ -168,7 +170,7 @@ func TestJWTAuthMiddleware_ExpiredToken(t *testing.T) {
 func TestJWTAuthMiddleware_MemberRole(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
-	tokenString, err := createTestJWT(userID, familyID, "member", testSecret, time.Hour)
+	tokenString, err := createTestJWT(&userID, &familyID, "member", testSecret, time.Hour)
 	require.NoError(t, err)
 
 	e := echo.New()
@@ -188,7 +190,7 @@ func TestJWTAuthMiddleware_MemberRole(t *testing.T) {
 		return c.String(http.StatusOK, "success")
 	}
 
-	middleware := JWTAuthMiddleware(testSecret, AuthCookieName)
+	middleware := JWTAuthMiddleware(testSecret)
 	h := middleware(handler)
 	err = h(c)
 
@@ -198,7 +200,7 @@ func TestJWTAuthMiddleware_MemberRole(t *testing.T) {
 func TestRequireAuth_WithAuth(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
-	tokenString, err := createTestJWT(userID, familyID, "admin", testSecret, time.Hour)
+	tokenString, err := createTestJWT(&userID, &familyID, "admin", testSecret, time.Hour)
 	require.NoError(t, err)
 
 	e := echo.New()
@@ -215,7 +217,7 @@ func TestRequireAuth_WithAuth(t *testing.T) {
 	}
 
 	// Apply both middlewares
-	authMW := JWTAuthMiddleware(testSecret, AuthCookieName)
+	authMW := JWTAuthMiddleware(testSecret)
 	requireMW := RequireAuth()
 	h := authMW(requireMW(handler))
 	err = h(c)
@@ -235,7 +237,7 @@ func TestRequireAuth_WithoutAuth(t *testing.T) {
 	}
 
 	// Apply both middlewares (optional auth + require)
-	authMW := JWTAuthMiddleware(testSecret, AuthCookieName)
+	authMW := JWTAuthMiddleware(testSecret)
 	requireMW := RequireAuth()
 	h := authMW(requireMW(handler))
 	err := h(c)
@@ -254,7 +256,7 @@ func TestRequireAuth_WithoutAuth(t *testing.T) {
 func TestRequireRole_AdminRole(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
-	tokenString, err := createTestJWT(userID, familyID, "admin", testSecret, time.Hour)
+	tokenString, err := createTestJWT(&userID, &familyID, "admin", testSecret, time.Hour)
 	require.NoError(t, err)
 
 	e := echo.New()
@@ -270,7 +272,7 @@ func TestRequireRole_AdminRole(t *testing.T) {
 		return c.String(http.StatusOK, "success")
 	}
 
-	authMW := JWTAuthMiddleware(testSecret, AuthCookieName)
+	authMW := JWTAuthMiddleware(testSecret)
 	roleMW := RequireRole(RoleAdmin)
 	h := authMW(roleMW(handler))
 	err = h(c)
@@ -290,4 +292,62 @@ func TestRoleString(t *testing.T) {
 	assert.Equal(t, "admin", RoleAdmin.String())
 	assert.Equal(t, "member", RoleMember.String())
 	assert.Equal(t, "unknown", RoleUnknown.String())
+}
+
+func TestRequireFamily_WithFamily(t *testing.T) {
+	userID := uuid.New()
+	familyID := uuid.New()
+	tokenString, err := createTestJWT(&userID, &familyID, "admin", testSecret, time.Hour)
+	require.NoError(t, err)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  AuthCookieName,
+		Value: tokenString,
+	})
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	handler := func(c echo.Context) error {
+		return c.String(http.StatusOK, "success")
+	}
+
+	// Apply both middlewares
+	authMW := JWTAuthMiddleware(testSecret)
+	familyMW := RequireFamily()
+	h := authMW(familyMW(handler))
+	err = h(c)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestRequireFamily_WithoutFamily(t *testing.T) {
+	userID := uuid.New()
+	// Create token with nil family_id
+	tokenString, err := createTestJWT(&userID, nil, "admin", testSecret, time.Hour)
+	require.NoError(t, err)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.AddCookie(&http.Cookie{
+		Name:  AuthCookieName,
+		Value: tokenString,
+	})
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	handler := func(c echo.Context) error {
+		return c.String(http.StatusOK, "success")
+	}
+
+	// Apply both middlewares
+	authMW := JWTAuthMiddleware(testSecret)
+	familyMW := RequireFamily()
+	h := authMW(familyMW(handler))
+	err = h(c)
+
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
 }

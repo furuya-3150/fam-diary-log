@@ -94,24 +94,24 @@ func NewRouter() *echo.Echo {
 
 	// User routes
 	users := e.Group("/users")
-	users.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	users.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 	users.PUT("/me", userHandler.EditProfile)
 	users.GET("/me", userHandler.GetProfile)
 
 	// Family routes
 	families := e.Group("/families")
-	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
-	families.POST("/me/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
-	families.POST("/join-requests", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
-	families.PATCH("/me/join-requests/:id", familyHandler.RespondToJoinRequest, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
-	families.POST("/:family_id/activate", familyHandler.ActivateFamilyContext, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
+	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
+	families.POST("/me/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
+	families.POST("/join-requests", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
+	families.PATCH("/me/join-requests/:id", familyHandler.RespondToJoinRequest, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
+	families.POST("/:family_id/activate", familyHandler.ActivateFamilyContext, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
 
 	// WebSocket route
-	e.GET("/ws", wsHandler.Handle, middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.AuthCookieName))
+	e.GET("/ws", wsHandler.Handle, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
 
 	// Notification settings routes
 	notifications := e.Group("/families/me/settings")
-	notifications.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret, middAuth.FamilyCookieName))
+	notifications.Use(middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 	notifications.PUT("/notifications", notificationHandler.UpdateNotificationSetting)
 	notifications.GET("/notifications", notificationHandler.GetNotificationSetting)
 

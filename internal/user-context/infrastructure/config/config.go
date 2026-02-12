@@ -6,6 +6,7 @@ type Config struct {
 	Session SessionConfig
 	JWT     JWTConfig
 	App     AppConfig
+	ClientApp ClientAppConfig
 }
 
 var Cfg Config
@@ -17,5 +18,6 @@ func Load() Config {
 		Session: loadSession(),
 		JWT:     loadJWT(),
 		App:     loadApp(),
+		ClientApp: loadClientApp(),
 	}
 }
