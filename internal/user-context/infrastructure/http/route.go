@@ -18,6 +18,7 @@ import (
 	"github.com/gorilla/sessions"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func NewRouter() *echo.Echo {
@@ -64,6 +65,14 @@ func NewRouter() *echo.Echo {
 	notificationHandler := handler.NewNotificationHandler(notificationUsecase)
 
 	e := echo.New()
+
+	// CORS middleware
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     cfg.CORS.AllowedOrigins,
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowCredentials: true,
+	}))
 
 	// Session middleware
 	store := sessions.NewCookieStore([]byte(cfg.Session.Secret))

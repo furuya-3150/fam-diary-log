@@ -49,6 +49,7 @@ func (dh *DiaryHandler) Create(e echo.Context) error {
 func (dh *DiaryHandler) List(e echo.Context) error {
 	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
 
+	log.Println("List diaries for family_id:", familyID)
 	// validate query
 	q := dto.DiaryListQuery{TargetDate: e.QueryParam("target_date")}
 	v := validator.New()
@@ -56,6 +57,7 @@ func (dh *DiaryHandler) List(e echo.Context) error {
 		validationErr := &errors.ValidationError{Message: "target_date is required and must be YYYY-MM-DD"}
 		return errors.RespondWithError(e, validationErr)
 	}
+	log.Println("Query parameters validated successfully:", q)
 
 	ctx := e.Request().Context()
 

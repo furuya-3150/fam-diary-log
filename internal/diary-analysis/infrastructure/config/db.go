@@ -8,4 +8,5 @@ type DBConfig struct {
 type Config struct {
 	DB DBConfig
 	JWT JWTConfig
+	CORS CORSConfig
 }
