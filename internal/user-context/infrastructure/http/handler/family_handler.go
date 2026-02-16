@@ -20,8 +20,6 @@ type FamilyHandler interface {
 	CreateFamily(c echo.Context) error
 	InviteMembers(c echo.Context) error
 	ApplyToFamily(c echo.Context) error
-	RespondToJoinRequest(c echo.Context) error
-	ActivateFamilyContext(c echo.Context) error
 }
 
 type familyHandler struct {
@@ -92,6 +90,8 @@ func (h *familyHandler) InviteMembers(c echo.Context) error {
 	req.UserID = userID
 
 	validate := validator.New()
+	// TODO: gmailのみ許可する場合はここでカスタムバリデーションを追加
+	// TODO: 一括招待の最大数制限もここで追加
 	type emailList struct {
 		Emails []string `validate:"required,min=1,dive,email"`
 	}
@@ -125,60 +125,7 @@ func (h *familyHandler) ApplyToFamily(c echo.Context) error {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
 	}
 
-	if err := h.fc.ApplyToFamily(ctx, &req, userID); err != nil {
-		return errors.RespondWithError(c, err)
-	}
-	return response.RespondSuccess(c, http.StatusNoContent, nil)
-}
-
-// RespondToJoinRequest PATCH /families/me/join-requests/:id
-func (h *familyHandler) RespondToJoinRequest(c echo.Context) error {
-	// Get request ID from path parameter
-	requestIDStr := c.Param("id")
-	slog.Info("RespondToJoinRequest: requestIDStr", "requestIDStr", requestIDStr)
-	requestID, err := uuid.Parse(requestIDStr)
-	if err != nil {
-		slog.Error("RespondToJoinRequest: invalid request id parameter", "error", err)
-		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request id parameter"})
-	}
-
-	var req dto.RespondJoinRequestRequest
-	if err := c.Bind(&req); err != nil {
-		slog.Error("RespondToJoinRequest: failed to bind request body", "error", err)
-		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request body: " + err.Error()})
-	}
-	req.ID = requestID
-
-	ctx := c.Request().Context()
-	val := ctx.Value(auth.ContextKeyUserID)
-	userID, ok := val.(uuid.UUID)
-	if !ok || userID == uuid.Nil {
-		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
-	}
-
-	if err := h.fc.RespondToJoinRequest(ctx, &req, userID); err != nil {
-		return errors.RespondWithError(c, err)
-	}
-	return response.RespondSuccess(c, http.StatusNoContent, nil)
-}
-
-// ActivateFamilyContext POST /families/:family_id/activate
-func (h *familyHandler) ActivateFamilyContext(c echo.Context) error {
-	ctx := c.Request().Context()
-	val := ctx.Value(auth.ContextKeyUserID)
-	userID, ok := val.(uuid.UUID)
-	if !ok || userID == uuid.Nil {
-		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid user_id context"})
-	}
-
-	// Get family_id from path parameter
-	familyIDStr := c.Param("family_id")
-	familyID, err := uuid.Parse(familyIDStr)
-	if err != nil {
-		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid family_id parameter"})
-	}
-
-	token, err := h.fc.ActivateFamilyContext(ctx, userID, familyID)
+	token, err := h.fu.ApplyToFamily(ctx, req.Token, userID)
 	if err != nil {
 		return errors.RespondWithError(c, err)
 	}
@@ -193,6 +140,5 @@ func (h *familyHandler) ActivateFamilyContext(c echo.Context) error {
 		MaxAge:   int(config.Cfg.JWT.ExpiresIn.Seconds()),
 	}
 	c.SetCookie(accessTokenCookie)
-
 	return response.RespondSuccess(c, http.StatusNoContent, nil)
 }

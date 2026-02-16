@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
@@ -12,7 +13,7 @@ import (
 
 type FamilyInvitationRepository interface {
 	CreateInvitation(ctx context.Context, invitation *domain.FamilyInvitation) error
-	UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time) error
+	UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time, invitedEmailsJSON json.RawMessage) error
 	FindInvitationByFamilyID(ctx context.Context, familyID uuid.UUID) (*domain.FamilyInvitation, error)
 	FindInvitationByToken(ctx context.Context, token string) (*domain.FamilyInvitation, error)
 }
@@ -33,11 +34,16 @@ func (r *familyInvitationRepository) CreateInvitation(ctx context.Context, invit
 	return nil
 }
 
-func (r *familyInvitationRepository) UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time) error {
+func (r *familyInvitationRepository) UpdateInvitationTokenAndExpires(ctx context.Context, familyID, inviterUserID uuid.UUID, token string, expiresAt time.Time, invitedEmailsJSON json.RawMessage) error {
 	dbConn := r.dm.DB(ctx)
 	return dbConn.Model(&domain.FamilyInvitation{}).
 		Where("family_id = ? AND inviter_user_id = ?", familyID, inviterUserID).
-		Updates(map[string]interface{}{"invitation_token": token, "expires_at": expiresAt, "updated_at": time.Now()}).Error
+		Updates(map[string]interface{}{
+			"invitation_token": token,
+			"expires_at":       expiresAt,
+			"invited_emails":   invitedEmailsJSON,
+			"updated_at":       time.Now(),
+		}).Error
 }
 
 func (r *familyInvitationRepository) FindInvitationByFamilyID(ctx context.Context, familyID uuid.UUID) (*domain.FamilyInvitation, error) {

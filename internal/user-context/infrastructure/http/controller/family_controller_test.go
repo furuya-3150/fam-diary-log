@@ -5,7 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/usecase"
 	"github.com/google/uuid"
@@ -30,87 +29,59 @@ func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.Invite
 	return args.Error(0)
 }
 
-func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) error {
+func (m *MockFamilyUsecase) ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) (string, error) {
 	args := m.Called(ctx, token, userID)
-	return args.Error(0)
-}
-
-func (m *MockFamilyUsecase) RespondToJoinRequest(ctx context.Context, requestID uuid.UUID, status domain.JoinRequestStatus, responderUserID uuid.UUID) error {
-	args := m.Called(ctx, requestID, status, responderUserID)
-	return args.Error(0)
-}
-
-func (m *MockFamilyUsecase) ActivateFamilyContext(ctx context.Context, userID, familyID uuid.UUID) (string, error) {
-	args := m.Called(ctx, userID, familyID)
-	if args.Get(0) == nil {
+	if args.Get(0) == "" {
 		return "", args.Error(1)
 	}
-	return args.String(0), args.Error(1)
+	return args.Get(0).(string), args.Error(1)
 }
 
-// func TestFamilyController_CreateFamily_Success(t *testing.T) {
-// 	mockUsecase := new(MockFamilyUsecase)
-// 	controller := NewFamilyController(mockUsecase)
+func TestFamilyController_InviteMembers_Success(t *testing.T) {
+	mockUsecase := new(MockFamilyUsecase)
+	controller := NewFamilyController(mockUsecase)
 
-// 	userID := uuid.New()
-// 	req := &dto.CreateFamilyRequest{
-// 		Name: "TestFamily",
-// 	}
-// 	expected := &domain.Family{
-// 		ID:   uuid.New(),
-// 		Name: req.Name,
-// 	}
-// 	mockUsecase.On("CreateFamily", mock.Anything, req.Name, userID).Return(expected, nil)
-
-// 	got, err := controller.CreateFamily(context.Background(), req, userID)
-// 	require.NoError(t, err)
-// 	require.Equal(t, req.Name, got.Name)
-// 	mockUsecase.AssertExpectations(t)
-// }
-
-// func TestFamilyController_CreateFamily_Error(t *testing.T) {
-// 	mockUsecase := new(MockFamilyUsecase)
-// 	controller := NewFamilyController(mockUsecase)
-
-// 	userID := uuid.New()
-// 	req := &dto.CreateFamilyRequest{
-// 		Name: "TestFamily",
-// 	}
-// 	mockUsecase.On("CreateFamily", mock.Anything, req.Name, userID).Return(nil, assert.AnError)
-
-// 	got, err := controller.CreateFamily(context.Background(), req, userID)
-// 	require.Error(t, err)
-// 	require.Nil(t, got)
-// 	mockUsecase.AssertExpectations(t)
-// }
-
-func TestFamilyController_RespondToJoinRequest_Success(t *testing.T) {
-	mockUC := new(MockFamilyUsecase)
-	ctrl := NewFamilyController(mockUC)
-
-	ctx := context.Background()
-	reqID := uuid.New()
+	familyID := uuid.New()
 	userID := uuid.New()
+	emails := []string{"test1@example.com", "test2@example.com"}
 
-	mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusApproved, userID).Return(nil)
+	req := &dto.InviteMembersRequest{
+		FamilyID: familyID,
+		UserID:   userID,
+		Emails:   emails,
+	}
 
-	req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusApproved)}
-	err := ctrl.RespondToJoinRequest(ctx, req, userID)
+	expectedInput := usecase.InviteMembersInput{
+		FamilyID:      familyID,
+		InviterUserID: userID,
+		Emails:        emails,
+	}
+
+	mockUsecase.On("InviteMembers", mock.Anything, expectedInput).Return(nil)
+
+	err := controller.InviteMembers(context.Background(), req)
 	require.NoError(t, err)
-	mockUC.AssertExpectations(t)
+	mockUsecase.AssertExpectations(t)
 }
 
-func TestFamilyController_RespondToJoinRequest_ErrorPropagate(t *testing.T) {
-	mockUC := new(MockFamilyUsecase)
-	ctrl := NewFamilyController(mockUC)
+func TestFamilyController_InviteMembers_UsecaseError(t *testing.T) {
+	mockUsecase := new(MockFamilyUsecase)
+	controller := NewFamilyController(mockUsecase)
 
-	ctx := context.Background()
-	reqID := uuid.New()
+	familyID := uuid.New()
 	userID := uuid.New()
+	emails := []string{"test@example.com"}
 
-	mockUC.On("RespondToJoinRequest", mock.Anything, reqID, domain.JoinRequestStatusRejected, userID).Return(errors.New("usecase err"))
+	req := &dto.InviteMembersRequest{
+		FamilyID: familyID,
+		UserID:   userID,
+		Emails:   emails,
+	}
 
-	req := &dto.RespondJoinRequestRequest{ID: reqID, Status: int(domain.JoinRequestStatusRejected)}
-	err := ctrl.RespondToJoinRequest(ctx, req, userID)
+	mockUsecase.On("InviteMembers", mock.Anything, mock.AnythingOfType("usecase.InviteMembersInput")).Return(errors.New("usecase error"))
+
+	err := controller.InviteMembers(context.Background(), req)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "usecase error")
+	mockUsecase.AssertExpectations(t)
 }
