@@ -86,7 +86,7 @@ func (u *authUsecase) InitiateGoogleLogin() (string, string, error) {
 	if authURL == "" {
 		return "", "", &pkgerrors.InternalError{Message: "Google OAuth not properly configured"}
 	}
-	return authURL, state, nil
+	return authURL + "&prompt=select_account", state, nil
 }
 
 var Counter = 0

@@ -14,6 +14,7 @@ import (
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 )
 
 func NewRouter() *echo.Echo {
@@ -32,6 +33,14 @@ func NewRouter() *echo.Echo {
 	diaryHandler := handler.NewDiaryHandler(diaryController)
 
 	e := echo.New()
+
+	// CORS middleware
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins:     config.CORS.AllowedOrigins,
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowCredentials: true,
+	}))
 
 	e.GET("healthz", func(c echo.Context) error {
 		return c.String(http.StatusOK, "Hello, World!")

@@ -6,6 +6,7 @@ func Load() *Config {
 	return &Config{
 		DB: loadDB(),
 		JWT: loadJWT(),
+		CORS: loadCORS(),
 	}
 }
 

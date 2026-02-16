@@ -155,7 +155,7 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 		Payload: map[string]interface{}{
 			"inviter_name": inviter.Name,
 			"family_name":  family.Name,
-			"app_url":      config.Cfg.App.URL + "/auth/google?token=" + token,
+			"app_url":      config.Cfg.ClientApp.URL + "/join-family/?token=" + token,
 		},
 	}
 
@@ -220,7 +220,7 @@ func (fu *familyUsecase) ApplyToFamily(ctx context.Context, token string, userID
 
 	slog.Debug("ApplyToFamily: user successfully added to family", "user_id", userID, "family_id", inv.FamilyID)
 
-	signed, err := fu.tg.GenerateToken(ctx, userID, inv.FamilyID, domain.RoleAdmin)
+	signed, err := fu.tg.GenerateToken(ctx, userID, inv.FamilyID, domain.RoleMember)
 	if err != nil {
 		return "", err
 	}

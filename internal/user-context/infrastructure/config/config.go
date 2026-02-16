@@ -7,6 +7,7 @@ type Config struct {
 	JWT     JWTConfig
 	App     AppConfig
 	ClientApp ClientAppConfig
+	CORS    CORSConfig
 }
 
 var Cfg Config
@@ -19,5 +20,6 @@ func Load() Config {
 		JWT:     loadJWT(),
 		App:     loadApp(),
 		ClientApp: loadClientApp(),
+		CORS:    loadCORS(),
 	}
 }

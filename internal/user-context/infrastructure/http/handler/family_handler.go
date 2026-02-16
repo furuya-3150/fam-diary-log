@@ -127,6 +127,7 @@ func (h *familyHandler) ApplyToFamily(c echo.Context) error {
 
 	token, err := h.fu.ApplyToFamily(ctx, req.Token, userID)
 	if err != nil {
+		slog.Error("ApplyToFamily: failed to apply to family", "error", err)
 		return errors.RespondWithError(c, err)
 	}
 
