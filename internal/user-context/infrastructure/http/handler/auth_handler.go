@@ -109,5 +109,5 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 		slog.Error("failed to delete session", "Error", err)
 	}
 
-	return c.Redirect(http.StatusTemporaryRedirect, config.Cfg.ClientApp.URL)
+	return c.Redirect(http.StatusTemporaryRedirect, config.Cfg.ClientApp.URL+"/auth/callback")
 }
