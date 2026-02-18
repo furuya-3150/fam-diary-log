@@ -32,8 +32,8 @@ func (m *MockDiaryUsecase) List(ctx context.Context, familyID uuid.UUID, targetD
 	return args.Get(0).([]*domain.Diary), args.Error(1)
 }
 
-func (m *MockDiaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
-	args := m.Called(ctx, familyID, year, month)
+func (m *MockDiaryUsecase) GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error) {
+	args := m.Called(ctx, familyID, userID, year, month)
 	return args.Int(0), args.Error(1)
 }
 
@@ -456,11 +456,12 @@ func TestDiaryController_GetCount_Success(t *testing.T) {
 	controller := NewDiaryController(mockUsecase)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
-	mockUsecase.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
+	mockUsecase.On("GetCount", mock.Anything, familyID, userID, "2026", "01").Return(5, nil)
 
 	// Call controller
-	count, err := controller.GetCount(context.Background(), familyID, "2026", "01")
+	count, err := controller.GetCount(context.Background(), familyID, userID, "2026", "01")
 
 	// Verify result
 	if err != nil {
@@ -482,11 +483,12 @@ func TestDiaryController_GetCount_ZeroCount(t *testing.T) {
 	controller := NewDiaryController(mockUsecase)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
-	mockUsecase.On("GetCount", mock.Anything, familyID, "2026", "02").Return(0, nil)
+	mockUsecase.On("GetCount", mock.Anything, familyID, userID, "2026", "02").Return(0, nil)
 
 	// Call controller
-	count, err := controller.GetCount(context.Background(), familyID, "2026", "02")
+	count, err := controller.GetCount(context.Background(), familyID, userID, "2026", "02")
 
 	// Verify result
 	if err != nil {
@@ -509,11 +511,12 @@ func TestDiaryController_GetCount_UsecaseError(t *testing.T) {
 
 	familyID := uuid.New()
 	usecaseErr := &errors.ValidationError{Message: "invalid date format"}
+	userID := uuid.New()
 
-	mockUsecase.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, usecaseErr)
+	mockUsecase.On("GetCount", mock.Anything, familyID, userID, "2026", "13").Return(0, usecaseErr)
 
 	// Call controller
-	count, err := controller.GetCount(context.Background(), familyID, "2026", "13")
+	count, err := controller.GetCount(context.Background(), familyID, userID, "2026", "13")
 
 	// Verify result
 	if err == nil {

@@ -12,7 +12,7 @@ import (
 type DiaryController interface {
 	Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error)
 	List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]dto.DiaryResponse, error)
-	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
+	GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error)
 	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*dto.StreakResponse, error)
 }
 
@@ -60,8 +60,8 @@ func (dc *diaryController) List(ctx context.Context, familyID uuid.UUID, targetD
 	return responses, nil
 }
 
-func (dc *diaryController) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
-	count, err := dc.du.GetCount(ctx, familyID, year, month)
+func (dc *diaryController) GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error) {
+	count, err := dc.du.GetCount(ctx, familyID, userID, year, month)
 	if err != nil {
 		return 0, err
 	}

@@ -622,8 +622,10 @@ func TestDiaryUsecase_GetCount_Success(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 	criteria := &domain.DiaryCountCriteria{
 		FamilyID:  familyID,
+		UserID:    userID,
 		YearMonth: "2026-01",
 	}
 
@@ -633,7 +635,7 @@ func TestDiaryUsecase_GetCount_Success(t *testing.T) {
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, nil, &clock.Real{})
 
 	// Act
-	count, err := usecase.GetCount(context.Background(), familyID, "2026", "01")
+	count, err := usecase.GetCount(context.Background(), familyID, userID, "2026", "01")
 
 	// Assert
 	assert.NoError(t, err)
@@ -651,8 +653,10 @@ func TestDiaryUsecase_GetCount_InvalidMonth(t *testing.T) {
 	mockStreakRepo := new(MockStreakRepository)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, nil, &clock.Real{})
 
+	userID := uuid.New()
+
 	// Act
-	count, err := usecase.GetCount(context.Background(), familyID, "2026", "13")
+	count, err := usecase.GetCount(context.Background(), familyID, userID, "2026", "13")
 
 	// Assert
 	assert.Error(t, err)
@@ -668,11 +672,12 @@ func TestDiaryUsecase_GetCount_InvalidYear(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 	mockStreakRepo := new(MockStreakRepository)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, nil, &clock.Real{})
 
 	// Act
-	count, err := usecase.GetCount(context.Background(), familyID, "0", "01")
+	count, err := usecase.GetCount(context.Background(), familyID, userID, "0", "01")
 
 	// Assert
 	assert.Error(t, err)
@@ -688,8 +693,10 @@ func TestDiaryUsecase_GetCount_ZeroCount(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 	criteria := &domain.DiaryCountCriteria{
 		FamilyID:  familyID,
+		UserID:    userID,
 		YearMonth: "2026-02",
 	}
 
@@ -699,7 +706,7 @@ func TestDiaryUsecase_GetCount_ZeroCount(t *testing.T) {
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, nil, &clock.Real{})
 
 	// Act
-	count, err := usecase.GetCount(context.Background(), familyID, "2026", "02")
+	count, err := usecase.GetCount(context.Background(), familyID, userID, "2026", "02")
 
 	// Assert
 	assert.NoError(t, err)
@@ -714,8 +721,10 @@ func TestDiaryUsecase_GetCount_RepositoryError(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 	criteria := &domain.DiaryCountCriteria{
 		FamilyID:  familyID,
+		UserID:    userID,
 		YearMonth: "2026-01",
 	}
 
@@ -726,7 +735,7 @@ func TestDiaryUsecase_GetCount_RepositoryError(t *testing.T) {
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, nil, &clock.Real{})
 
 	// Act
-	count, err := usecase.GetCount(context.Background(), familyID, "2026", "01")
+	count, err := usecase.GetCount(context.Background(), familyID, userID, "2026", "01")
 
 	// Assert
 	assert.Error(t, err)

@@ -38,8 +38,8 @@ func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID, targ
 	return args.Get(0).([]dto.DiaryResponse), args.Error(1)
 }
 
-func (m *MockDiaryController) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
-	args := m.Called(ctx, familyID, year, month)
+func (m *MockDiaryController) GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error) {
+	args := m.Called(ctx, familyID, userID, year, month)
 	return args.Int(0), args.Error(1)
 }
 
@@ -475,12 +475,14 @@ func TestDiaryHandler_GetCount_Success(t *testing.T) {
 	handler := NewDiaryHandler(mockController)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
-	mockController.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
+	mockController.On("GetCount", mock.Anything, familyID, userID, "2026", "01").Return(5, nil)
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/families/me/diaries/count?year=2026&month=01", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -512,12 +514,14 @@ func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
 	handler := NewDiaryHandler(mockController)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
-	mockController.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
+	mockController.On("GetCount", mock.Anything, familyID, userID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/families/me/diaries/count?year=2026&month=13", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -544,6 +548,7 @@ func TestDiaryHandler_GetCount_MissingParams(t *testing.T) {
 	handler := NewDiaryHandler(mockController)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
 	testCases := []struct {
 		name string
@@ -559,6 +564,7 @@ func TestDiaryHandler_GetCount_MissingParams(t *testing.T) {
 			// Create HTTP request
 			req := httptest.NewRequest("GET", tc.url, nil)
 			ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+			ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 			req = req.WithContext(ctx)
 
 			// Create response writer

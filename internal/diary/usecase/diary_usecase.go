@@ -21,7 +21,7 @@ import (
 type DiaryUsecase interface {
 	Create(ctx context.Context, d *domain.Diary) (*domain.Diary, error)
 	List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]*domain.Diary, error)
-	GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error)
+	GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error)
 	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*domain.Streak, error)
 }
 
@@ -169,7 +169,7 @@ func (du *diaryUsecase) List(ctx context.Context, familyID uuid.UUID, targetDate
 	return diaries, nil
 }
 
-func (du *diaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
+func (du *diaryUsecase) GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error) {
 	// Validate and parse year and month
 	_, _, err := validation.ValidateYearMonth(year, month)
 	if err != nil {
@@ -180,6 +180,7 @@ func (du *diaryUsecase) GetCount(ctx context.Context, familyID uuid.UUID, year, 
 	yearMonth := year + "-" + month
 
 	criteria := &domain.DiaryCountCriteria{
+		UserID:    userID,
 		FamilyID:  familyID,
 		YearMonth: yearMonth,
 	}

@@ -7,12 +7,12 @@ import (
 )
 
 type DiaryResponse struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	FamilyID  uuid.UUID
-	Title     string
-	Content   string
-	CreatedAt time.Time
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	FamilyID  uuid.UUID `json:"family_id"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type StreakResponse struct {
