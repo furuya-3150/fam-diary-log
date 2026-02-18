@@ -50,7 +50,7 @@ func NewRouter() *echo.Echo {
 	// User
 	userUsecase := usecase.NewUserUsecase(authRepo, txManager)
 	userController := controller.NewUserController(userUsecase)
-	userHandler := handler.NewUserHandler(userController)
+	userHandler := handler.NewUserHandler(userController, userUsecase)
 
 	// mail broker publisher
 	pub := broker.NewDiaryMailerPublisher(slog.Default())
@@ -105,6 +105,7 @@ func NewRouter() *echo.Echo {
 	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
 	families.POST("/me/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 	families.POST("/join-requests", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
+	families.GET("/me/members", userHandler.GetFamilyMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 
 	// Notification settings routes
 	notifications := e.Group("/families/me/settings")
