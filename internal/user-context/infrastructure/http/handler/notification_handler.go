@@ -46,7 +46,6 @@ func (h *notificationHandler) GetNotificationSetting(c echo.Context) error {
 	}
 
 	resp := dto.NotificationSettingResponse{
-		FamilyID: s.FamilyID,
 		PostCreatedEnabled: s.PostCreatedEnabled,
 	}
 	return response.RespondSuccess(c, http.StatusOK, resp)

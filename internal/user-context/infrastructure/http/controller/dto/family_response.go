@@ -47,6 +47,5 @@ type NotificationSettingRequest struct {
 }
 
 type NotificationSettingResponse struct {
-	FamilyID           uuid.UUID `json:"family_id"`
 	PostCreatedEnabled bool      `json:"post_created_enabled"`
 }

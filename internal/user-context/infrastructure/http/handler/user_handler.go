@@ -46,7 +46,7 @@ func (h *userHandler) EditProfile(c echo.Context) error {
 	if err != nil {
 		return errors.RespondWithError(c, err)
 	}
-	return c.JSON(http.StatusOK, user)
+	return response.RespondSuccess(c, http.StatusOK, user)
 }
 
 // GetProfile GET /users/me
@@ -61,7 +61,7 @@ func (h *userHandler) GetProfile(c echo.Context) error {
 	if err != nil {
 		return errors.RespondWithError(c, err)
 	}
-	return c.JSON(http.StatusOK, user)
+	return response.RespondSuccess(c, http.StatusOK, user)
 }
 
 // GetFamilyMembers GET /families/me/members
