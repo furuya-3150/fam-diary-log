@@ -62,12 +62,14 @@ func TestUserRepositoryGetUsersByFamilyIDSuccess(t *testing.T) {
 	require.NoError(t, err)
 
 	// 全フィールドを指定して取得
-	fields := []string{"id", "email", "name", "provider", "provider_id", "created_at", "updated_at"}
-	users, err := repo.GetUsersByFamilyID(ctx, familyID, fields)
+	userFields := []string{"id", "email", "name", "provider", "provider_id", "created_at", "updated_at"}
+	familyMemberFields := []string{"role"}
+	members, err := repo.GetUsersByFamilyID(ctx, familyID, userFields, familyMemberFields)
 	require.NoError(t, err)
-	assert.Len(t, users, 2)
-	assert.Equal(t, user1ID, users[0].ID)
-	assert.Equal(t, "User One", users[0].Name)
+	assert.Len(t, members, 2)
+	assert.Equal(t, user1ID, members[0].User.ID)
+	assert.Equal(t, "User One", members[0].User.Name)
+	assert.Equal(t, domain.RoleAdmin, members[0].Role)
 }
 
 func TestUserRepositoryGetUsersByFamilyIDWithFieldSelection(t *testing.T) {
@@ -103,12 +105,14 @@ func TestUserRepositoryGetUsersByFamilyIDWithFieldSelection(t *testing.T) {
 	require.NoError(t, err)
 
 	// フィールド指定ありで取得
-	fields := []string{"id", "name"}
-	users, err := repo.GetUsersByFamilyID(ctx, familyID, fields)
+	userFields := []string{"id", "name"}
+	familyMemberFields := []string{"role"}
+	members, err := repo.GetUsersByFamilyID(ctx, familyID, userFields, familyMemberFields)
 	require.NoError(t, err)
-	assert.Len(t, users, 1)
-	assert.Equal(t, userID, users[0].ID)
-	assert.Equal(t, "Test User", users[0].Name)
+	assert.Len(t, members, 1)
+	assert.Equal(t, userID, members[0].User.ID)
+	assert.Equal(t, "Test User", members[0].User.Name)
+	assert.Equal(t, domain.RoleAdmin, members[0].Role)
 }
 
 func TestUserRepositoryGetUsersByFamilyIDNoMembers(t *testing.T) {
@@ -123,8 +127,9 @@ func TestUserRepositoryGetUsersByFamilyIDNoMembers(t *testing.T) {
 
 	// 存在しないfamilyIDで取得
 	familyID := uuid.New()
-	fields := []string{"id", "email", "name"}
-	users, err := repo.GetUsersByFamilyID(ctx, familyID, fields)
+	userFields := []string{"id", "email", "name"}
+	familyMemberFields := []string{"role"}
+	members, err := repo.GetUsersByFamilyID(ctx, familyID, userFields, familyMemberFields)
 	require.NoError(t, err)
-	assert.Len(t, users, 0)
+	assert.Len(t, members, 0)
 }

@@ -34,12 +34,12 @@ func (m *MockUserUsecase) GetUser(ctx context.Context, userID uuid.UUID) (*domai
 	return args.Get(0).(*domain.User), args.Error(1)
 }
 
-func (m *MockUserUsecase) GetFamilyMembers(ctx context.Context, familyID uuid.UUID, fields []string) ([]*domain.User, error) {
+func (m *MockUserUsecase) GetFamilyMembers(ctx context.Context, familyID uuid.UUID, fields []string) ([]*usecase.FamilyMemberInfo, error) {
 	args := m.Called(ctx, familyID, fields)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
-	return args.Get(0).([]*domain.User), args.Error(1)
+	return args.Get(0).([]*usecase.FamilyMemberInfo), args.Error(1)
 }
 
 func TestUserController_EditProfile_Success(t *testing.T) {

@@ -32,6 +32,17 @@ func (r Role) String() string {
 	}
 }
 
+func (r Role) StringJP() string {
+	switch r {
+	case RoleAdmin:
+		return "管理者"
+	case RoleMember:
+		return "メンバー"
+	default:
+		return "unknown"
+	}
+}
+
 type FamilyMember struct {
 	ID        uuid.UUID `gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	FamilyID  uuid.UUID `gorm:"type:uuid;not null;index"`

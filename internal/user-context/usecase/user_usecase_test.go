@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
+	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -151,52 +152,81 @@ func TestGetUser_RepoError(t *testing.T) {
 
 func TestGetFamilyMembers_Success(t *testing.T) {
 	familyID := uuid.New()
-	user1 := &domain.User{ID: uuid.New(), Email: "user1@example.com", Name: "User One"}
-	user2 := &domain.User{ID: uuid.New(), Email: "user2@example.com", Name: "User Two"}
-	expectedUsers := []*domain.User{user1, user2}
+	usersWithRoles := []*repository.UserWithRole{
+		{
+			User: &domain.User{
+				ID:    uuid.New(),
+				Email: "user1@example.com",
+				Name:  "User One",
+			},
+			Role: domain.RoleAdmin,
+		},
+		{
+			User: &domain.User{
+				ID:    uuid.New(),
+				Email: "user2@example.com",
+				Name:  "User Two",
+			},
+			Role: domain.RoleMember,
+		},
+	}
 
 	repo := new(MockUserRepository)
 	tx := new(MockTransactionManager)
 	// デフォルトフィールドで呼ばれることを期待
-	defaultFields := []string{"id", "email", "name", "provider", "provider_id", "created_at", "updated_at"}
-	repo.On("GetUsersByFamilyID", mock.Anything, familyID, defaultFields).Return(expectedUsers, nil)
+	defaultUserFields := []string{"id", "email", "name", "provider", "provider_id", "created_at", "updated_at"}
+	defaultFamilyMemberFields := []string{"role"}
+	repo.On("GetUsersByFamilyID", mock.Anything, familyID, defaultUserFields, defaultFamilyMemberFields).Return(usersWithRoles, nil)
 
 	uc := setupUserUsecase(repo, tx)
 	got, err := uc.GetFamilyMembers(context.Background(), familyID, nil)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
-	require.Equal(t, user1.ID, got[0].ID)
-	require.Equal(t, user2.ID, got[1].ID)
+	require.Equal(t, usersWithRoles[0].User.ID, got[0].ID)
+	require.Equal(t, usersWithRoles[1].User.ID, got[1].ID)
 	repo.AssertExpectations(t)
 }
 
 func TestGetFamilyMembers_WithFieldSelection(t *testing.T) {
 	familyID := uuid.New()
-	user1 := &domain.User{ID: uuid.New(), Name: "User One"}
-	expectedUsers := []*domain.User{user1}
+	usersWithRoles := []*repository.UserWithRole{
+		{
+			User: &domain.User{
+				ID:   uuid.New(),
+				Name: "User One",
+			},
+			Role: domain.RoleAdmin,
+		},
+	}
 
 	repo := new(MockUserRepository)
 	tx := new(MockTransactionManager)
 	// 指定されたフィールドで呼ばれることを期待
-	repo.On("GetUsersByFamilyID", mock.Anything, familyID, []string{"id", "name"}).Return(expectedUsers, nil)
+	repo.On("GetUsersByFamilyID", mock.Anything, familyID, []string{"id", "name"}, []string{"role"}).Return(usersWithRoles, nil)
 
 	uc := setupUserUsecase(repo, tx)
-	got, err := uc.GetFamilyMembers(context.Background(), familyID, []string{"id", "name"})
+	got, err := uc.GetFamilyMembers(context.Background(), familyID, []string{"id", "name", "role"})
 	require.NoError(t, err)
 	require.Len(t, got, 1)
-	require.Equal(t, user1.ID, got[0].ID)
+	require.Equal(t, usersWithRoles[0].User.ID, got[0].ID)
 	repo.AssertExpectations(t)
 }
 
 func TestGetFamilyMembers_WithInvalidFields(t *testing.T) {
 	familyID := uuid.New()
-	user1 := &domain.User{ID: uuid.New(), Name: "User One"}
-	expectedUsers := []*domain.User{user1}
+	usersWithRoles := []*repository.UserWithRole{
+		{
+			User: &domain.User{
+				ID:   uuid.New(),
+				Name: "User One",
+			},
+		},
+	}
 
 	repo := new(MockUserRepository)
 	tx := new(MockTransactionManager)
 	// 無効なフィールドは除外され、有効なフィールドのみで呼ばれる
-	repo.On("GetUsersByFamilyID", mock.Anything, familyID, []string{"id", "name"}).Return(expectedUsers, nil)
+	repo.On("GetUsersByFamilyID", mock.Anything, familyID, []string{"id", "name"}, []string{}).Return(usersWithRoles, nil)
 
 	uc := setupUserUsecase(repo, tx)
 	// invalid_fieldは除外される
@@ -208,14 +238,22 @@ func TestGetFamilyMembers_WithInvalidFields(t *testing.T) {
 
 func TestGetFamilyMembers_AllInvalidFieldsUsesDefault(t *testing.T) {
 	familyID := uuid.New()
-	user1 := &domain.User{ID: uuid.New(), Email: "user1@example.com"}
-	expectedUsers := []*domain.User{user1}
+	usersWithRoles := []*repository.UserWithRole{
+		{
+			User: &domain.User{
+				ID:    uuid.New(),
+				Email: "user1@example.com",
+			},
+			Role: domain.RoleAdmin,
+		},
+	}
 
 	repo := new(MockUserRepository)
 	tx := new(MockTransactionManager)
 	// すべて無効なフィールドの場合、デフォルトが使用される
-	defaultFields := []string{"id", "email", "name", "provider", "provider_id", "created_at", "updated_at"}
-	repo.On("GetUsersByFamilyID", mock.Anything, familyID, defaultFields).Return(expectedUsers, nil)
+	defaultUserFields := []string{"id", "email", "name", "provider", "provider_id", "created_at", "updated_at"}
+	defaultFamilyMemberFields := []string{"role"}
+	repo.On("GetUsersByFamilyID", mock.Anything, familyID, defaultUserFields, defaultFamilyMemberFields).Return(usersWithRoles, nil)
 
 	uc := setupUserUsecase(repo, tx)
 	got, err := uc.GetFamilyMembers(context.Background(), familyID, []string{"invalid1", "invalid2"})
@@ -228,7 +266,7 @@ func TestGetFamilyMembers_RepoError(t *testing.T) {
 	familyID := uuid.New()
 	repo := new(MockUserRepository)
 	tx := new(MockTransactionManager)
-	repo.On("GetUsersByFamilyID", mock.Anything, familyID, mock.Anything).Return(nil, errors.New("db fail"))
+	repo.On("GetUsersByFamilyID", mock.Anything, familyID, mock.Anything, mock.Anything).Return(nil, errors.New("db fail"))
 
 	uc := setupUserUsecase(repo, tx)
 	_, err := uc.GetFamilyMembers(context.Background(), familyID, nil)

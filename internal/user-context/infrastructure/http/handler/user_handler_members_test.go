@@ -21,18 +21,20 @@ func TestUserHandlerGetFamilyMembersSuccess(t *testing.T) {
 
 	// モックusecaseの準備
 	mockUsecase := &mockUserUsecase{
-		users: []*domain.User{
+		members: []*usecase.FamilyMemberInfo{
 			{
 				ID:       uuid.New(),
 				Email:    "user1@example.com",
 				Name:     "User One",
 				Provider: domain.AuthProviderGoogle,
+				Role:     domain.RoleAdmin.String(),
 			},
 			{
 				ID:       uuid.New(),
 				Email:    "user2@example.com",
 				Name:     "User Two",
 				Provider: domain.AuthProviderGoogle,
+				Role:     domain.RoleMember.String(),
 			},
 		},
 	}
@@ -71,10 +73,11 @@ func TestUserHandlerGetFamilyMembersWithFieldSelection(t *testing.T) {
 	e := echo.New()
 
 	mockUsecase := &mockUserUsecase{
-		users: []*domain.User{
+		members: []*usecase.FamilyMemberInfo{
 			{
 				ID:   uuid.New(),
 				Name: "User One",
+				Role: domain.RoleAdmin.String(),
 			},
 		},
 		capturedFields: nil,
@@ -85,7 +88,7 @@ func TestUserHandlerGetFamilyMembersWithFieldSelection(t *testing.T) {
 	}
 
 	familyID := uuid.New()
-	req := httptest.NewRequest(http.MethodGet, "/families/me/members?fields=id,name", nil)
+	req := httptest.NewRequest(http.MethodGet, "/families/me/members?fields=id,name,role", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 
@@ -98,7 +101,7 @@ func TestUserHandlerGetFamilyMembersWithFieldSelection(t *testing.T) {
 	require.NoError(t, err)
 
 	// fieldsパラメータが正しくパースされたことを確認
-	assert.Equal(t, []string{"id", "name"}, mockUsecase.capturedFields)
+	assert.Equal(t, []string{"id", "name", "role"}, mockUsecase.capturedFields)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
@@ -124,17 +127,17 @@ func TestUserHandlerGetFamilyMembersNoFamilyID(t *testing.T) {
 
 // モックusecase
 type mockUserUsecase struct {
-	users          []*domain.User
+	members        []*usecase.FamilyMemberInfo
 	capturedFields []string
 	shouldError    bool
 }
 
-func (m *mockUserUsecase) GetFamilyMembers(ctx context.Context, familyID uuid.UUID, fields []string) ([]*domain.User, error) {
+func (m *mockUserUsecase) GetFamilyMembers(ctx context.Context, familyID uuid.UUID, fields []string) ([]*usecase.FamilyMemberInfo, error) {
 	m.capturedFields = fields
 	if m.shouldError {
 		return nil, assert.AnError
 	}
-	return m.users, nil
+	return m.members, nil
 }
 
 func (m *mockUserUsecase) EditUser(ctx context.Context, input *usecase.EditUserInput) (*domain.User, error) {
