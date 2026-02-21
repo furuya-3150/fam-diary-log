@@ -78,7 +78,10 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		d.ID = uuid.New()
 	}
 
-	du.tm.BeginTx(ctx)
+	ctx, err = du.tm.BeginTx(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	diary, err := du.dr.Create(ctx, d)
 	if err != nil {
@@ -102,7 +105,6 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		slog.Error("failed to publish diary created event", "error", err.Error())
 		return nil, err
 	}
-	defer du.publisher.Close()
 
 	du.tm.CommitTx(ctx)
 
