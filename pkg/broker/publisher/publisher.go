@@ -26,7 +26,6 @@ type Config struct {
 // RabbitMQPublisher implements Publisher for RabbitMQ
 type RabbitMQPublisher struct {
 	conn   *amqp.Connection
-	ch     *amqp.Channel
 	config Config
 	l      *slog.Logger
 }
@@ -40,36 +39,45 @@ func NewRabbitMQPublisher(conn *amqp.Connection, config Config, l *slog.Logger) 
 		config.ExchangeKind = "topic" // default to topic
 	}
 
+	// チャネルを作成してexchangeの存在を確認（初期化時のみ）
 	ch, err := conn.Channel()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open channel: %w", err)
 	}
+	defer ch.Close()
+
+	// Ensure exchange exists
+	if err := ch.ExchangeDeclare(
+		config.ExchangeName, // name
+		config.ExchangeKind, // kind
+		true,                // durable
+		false,               // auto-deleted
+		false,               // internal
+		false,               // no-wait
+		nil,                 // arguments
+	); err != nil {
+		return nil, fmt.Errorf("failed to declare exchange: %w", err)
+	}
 
 	publisher := &RabbitMQPublisher{
 		conn:   conn,
-		ch:     ch,
 		config: config,
 		l:      l,
-	}
-
-	// Ensure exchange exists
-	if err := publisher.ch.ExchangeDeclare(
-		publisher.config.ExchangeName, // name
-		publisher.config.ExchangeKind, // kind
-		true,                          // durable
-		false,                         // auto-deleted
-		false,                         // internal
-		false,                         // no-wait
-		nil,                           // arguments
-	); err != nil {
-		return nil, fmt.Errorf("failed to declare exchange: %w", err)
 	}
 
 	return publisher, nil
 }
 
 // Publish publishes an event to RabbitMQ
+// リクエスト毎にchannelを作成してクローズすることで、channel/connection is not openエラーを回避
 func (p *RabbitMQPublisher) Publish(ctx context.Context, event events.Event) error {
+	// リクエスト毎にchannelを作成
+	ch, err := p.conn.Channel()
+	if err != nil {
+		return fmt.Errorf("failed to open channel: %w", err)
+	}
+	defer ch.Close()
+
 	body, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal event: %w", err)
@@ -81,7 +89,7 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, event events.Event) err
 		DeliveryMode: amqp.Persistent,
 	}
 
-	if err := p.ch.PublishWithContext(
+	if err := ch.PublishWithContext(
 		ctx,
 		p.config.ExchangeName, // exchange
 		event.EventType(),     // routing key
@@ -98,9 +106,10 @@ func (p *RabbitMQPublisher) Publish(ctx context.Context, event events.Event) err
 }
 
 // Close closes the publisher
+// connectionのみクローズ（channelは各Publishで都度クローズされる）
 func (p *RabbitMQPublisher) Close() error {
-	if err := p.ch.Close(); err != nil {
-		return err
+	if p.conn != nil {
+		return p.conn.Close()
 	}
-	return p.conn.Close()
+	return nil
 }

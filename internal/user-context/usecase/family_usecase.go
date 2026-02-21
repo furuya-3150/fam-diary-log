@@ -137,7 +137,6 @@ func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersI
 			return err
 		}
 	}
-	defer fu.mp.Close()
 
 	inviter, err := fu.ur.GetUserByID(ctx, input.InviterUserID)
 	if err != nil {
