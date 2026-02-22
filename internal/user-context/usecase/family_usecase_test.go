@@ -248,7 +248,7 @@ func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 	fir.On("FindInvitationByFamilyID", mock.Anything, familyID).Return(nil, nil)
 	fir.On("CreateInvitation", mock.Anything, mock.AnythingOfType("*domain.FamilyInvitation")).Return(nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
-	mp.On("Close").Return(nil)
+	// mp.On("Close").Return(nil)
 	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
 	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 
@@ -272,7 +272,7 @@ func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
 	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
 	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
-	mp.On("Close").Return(nil)
+	// mp.On("Close").Return(nil)
 
 	err := u.InviteMembers(ctx, InviteMembersInput{FamilyID: familyID, InviterUserID: inviterID, Emails: []string{"a@example.com"}})
 	require.NoError(t, err)
