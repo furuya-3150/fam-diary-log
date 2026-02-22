@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	KouseiEndpoint = "https://jlp.yahooapis.jp/KouseiService/V1/kousei"
+	KouseiEndpoint = "https://jlp.yahooapis.jp/KouseiService/V2/kousei"
 )
 
 type YahooNLPGateway struct {
@@ -41,8 +41,8 @@ type kouseiRequest struct {
 type kouseiResponse struct {
 	Result struct {
 		Suggestions []struct {
-			Offset      int    `json:"offset"`
-			Length      int    `json:"length"`
+			Offset      string `json:"offset"`
+			Length      string `json:"length"`
 			Message     string `json:"message"`
 			Suggestion  string `json:"suggestion"`
 			SurfaceForm string `json:"surface_form"`
