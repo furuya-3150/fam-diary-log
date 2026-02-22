@@ -3,14 +3,13 @@ package controller
 import (
 	"context"
 
-	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/usecase"
 	"github.com/google/uuid"
 )
 
 type DiaryController interface {
-	Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error)
+	Create(ctx context.Context, userID, familyID uuid.UUID, req *dto.CreateDiaryRequest) (*dto.DiaryResponse, error)
 	List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]dto.DiaryResponse, error)
 	GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error)
 	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*dto.StreakResponse, error)
@@ -24,11 +23,20 @@ func NewDiaryController(du usecase.DiaryUsecase) DiaryController {
 	return &diaryController{du: du}
 }
 
-func (dc *diaryController) Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error) {
-	diary, err := dc.du.Create(ctx, d)
+func (dc *diaryController) Create(ctx context.Context, userID, familyID uuid.UUID, req *dto.CreateDiaryRequest) (*dto.DiaryResponse, error) {
+	input := &usecase.CreateDiaryInput{
+		UserID:             userID,
+		FamilyID:           familyID,
+		Title:              req.Title,
+		Content:            req.Content,
+		WritingTimeSeconds: req.WritingTimeSeconds,
+	}
+
+	diary, err := dc.du.Create(ctx, input)
 	if err != nil {
 		return nil, err
 	}
+
 	res := &dto.DiaryResponse{
 		ID:        diary.ID,
 		FamilyID:  diary.FamilyID,
@@ -37,7 +45,7 @@ func (dc *diaryController) Create(ctx context.Context, d *domain.Diary) (*dto.Di
 		Content:   diary.Content,
 		CreatedAt: diary.CreatedAt,
 	}
-	return res, err
+	return res, nil
 }
 
 func (dc *diaryController) List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]dto.DiaryResponse, error) {

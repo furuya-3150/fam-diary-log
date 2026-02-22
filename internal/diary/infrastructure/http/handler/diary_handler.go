@@ -1,11 +1,11 @@
 package handler
 
 import (
-	"log"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 
-	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller"
 	dto "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
@@ -18,33 +18,66 @@ import (
 
 // DiaryHandler handles HTTP requests for diary operations
 type DiaryHandler struct {
-	dc controller.DiaryController
+	dc       controller.DiaryController
+	validate *validator.Validate
 }
 
 // NewDiaryHandler creates a new instance of DiaryHandler
 func NewDiaryHandler(dc controller.DiaryController) *DiaryHandler {
 	return &DiaryHandler{
-		dc: dc,
+		dc:       dc,
+		validate: validator.New(),
 	}
 }
 
 func (dh *DiaryHandler) Create(e echo.Context) error {
-	var req *domain.Diary
+	var req dto.CreateDiaryRequest
 	if err := e.Bind(&req); err != nil {
-		log.Println("bind error", err)
-		validationErr := &errors.ValidationError{Message: err.Error()}
+		slog.Debug("bind error", "error", err)
+		validationErr := &errors.ValidationError{Message: "invalid request body: " + err.Error()}
 		return errors.RespondWithError(e, validationErr)
 	}
-	req.FamilyID = e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
-	req.UserID = e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
 
-	res, err := dh.dc.Create(e.Request().Context(), req)
+	// バリデーション実行
+	if err := dh.validate.Struct(&req); err != nil {
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			// バリデーションエラーを人間が読める形式に変換
+			errorMessages := make([]string, 0, len(validationErrors))
+			for _, fieldError := range validationErrors {
+				errorMessages = append(errorMessages, formatValidationError(fieldError))
+			}
+			return errors.RespondWithError(e, &errors.ValidationError{
+				Message: fmt.Sprintf("validation failed: %s", strings.Join(errorMessages, ", ")),
+			})
+		}
+		return errors.RespondWithError(e, &errors.ValidationError{Message: "validation failed: " + err.Error()})
+	}
+
+	// コンテキストからuserIDとfamilyIDを取得
+	userID := e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
+	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
+
+	res, err := dh.dc.Create(e.Request().Context(), userID, familyID, &req)
 	if err != nil {
 		slog.Error("controller create error", "error", err.Error())
 		return errors.RespondWithError(e, err)
 	}
 
 	return response.RespondSuccess(e, http.StatusOK, res)
+}
+
+// formatValidationError converts validator.FieldError to a human-readable message
+func formatValidationError(fe validator.FieldError) string {
+	switch fe.Tag() {
+	case "required":
+		return fmt.Sprintf("%s is required", fe.Field())
+	case "min":
+		return fmt.Sprintf("%s must be at least %s", fe.Field(), fe.Param())
+	case "max":
+		return fmt.Sprintf("%s must be at most %s", fe.Field(), fe.Param())
+	default:
+		return fmt.Sprintf("%s is invalid", fe.Field())
+	}
 }
 
 func (dh *DiaryHandler) List(e echo.Context) error {

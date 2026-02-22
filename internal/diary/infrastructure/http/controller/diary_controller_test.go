@@ -7,6 +7,7 @@ import (
 
 	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
+	"github.com/furuya-3150/fam-diary-log/internal/diary/usecase"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
@@ -16,8 +17,8 @@ type MockDiaryUsecase struct {
 	mock.Mock
 }
 
-func (m *MockDiaryUsecase) Create(ctx context.Context, diary *domain.Diary) (*domain.Diary, error) {
-	args := m.Called(ctx, diary)
+func (m *MockDiaryUsecase) Create(ctx context.Context, input *usecase.CreateDiaryInput) (*domain.Diary, error) {
+	args := m.Called(ctx, input)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -72,12 +73,15 @@ func TestDiaryController_Create_Success(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 
-	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
-		return d.Title == inputDiary.Title && d.Content == inputDiary.Content
+	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(input *usecase.CreateDiaryInput) bool {
+		return input.Title == inputDiary.Title && input.Content == inputDiary.Content
 	})).Return(expectedDiary, nil)
 
 	// Call controller
-	result, err := controller.Create(context.Background(), inputDiary)
+	result, err := controller.Create(context.Background(), inputDiary.UserID, inputDiary.FamilyID, &dto.CreateDiaryRequest{
+		Title:   inputDiary.Title,
+		Content: inputDiary.Content,
+	})
 
 	// Verify result
 	if err != nil {
@@ -119,7 +123,10 @@ func TestDiaryController_Create_ValidationError(t *testing.T) {
 	mockUsecase.On("Create", mock.Anything, mock.Anything).Return(nil, validationErr)
 
 	// Call controller
-	result, err := controller.Create(context.Background(), inputDiary)
+	result, err := controller.Create(context.Background(), inputDiary.UserID, inputDiary.FamilyID, &dto.CreateDiaryRequest{
+		Title:   inputDiary.Title,
+		Content: inputDiary.Content,
+	})
 
 	// Verify result
 	if err == nil {
@@ -149,7 +156,10 @@ func TestDiaryController_Create_InternalError(t *testing.T) {
 	mockUsecase.On("Create", mock.Anything, mock.Anything).Return(nil, internalErr)
 
 	// Call controller
-	result, err := controller.Create(context.Background(), inputDiary)
+	result, err := controller.Create(context.Background(), inputDiary.UserID, inputDiary.FamilyID, &dto.CreateDiaryRequest{
+		Title:   inputDiary.Title,
+		Content: inputDiary.Content,
+	})
 
 	// Verify result
 	if err == nil {
@@ -195,7 +205,10 @@ func TestDiaryController_Create_DTOConversion(t *testing.T) {
 	mockUsecase.On("Create", mock.Anything, mock.Anything).Return(usecaseDiary, nil)
 
 	// Call controller
-	result, err := controller.Create(context.Background(), inputDiary)
+	result, err := controller.Create(context.Background(), inputDiary.UserID, inputDiary.FamilyID, &dto.CreateDiaryRequest{
+		Title:   inputDiary.Title,
+		Content: inputDiary.Content,
+	})
 
 	// Verify result
 	if err != nil {
@@ -260,7 +273,10 @@ func TestDiaryController_Create_ContextCancelled(t *testing.T) {
 	}), mock.Anything).Return(nil, ctxErr)
 
 	// Call controller
-	result, err := controller.Create(ctx, inputDiary)
+	result, err := controller.Create(ctx, inputDiary.UserID, inputDiary.FamilyID, &dto.CreateDiaryRequest{
+		Title:   inputDiary.Title,
+		Content: inputDiary.Content,
+	})
 
 	// Verify result
 	if result != nil {
@@ -282,32 +298,42 @@ func TestDiaryController_Create_MultipleCallsIndependent(t *testing.T) {
 	diary1ID := uuid.New()
 	diary2ID := uuid.New()
 
-	diary1 := &domain.Diary{
-		ID:        diary1ID,
+	diary1 := &usecase.CreateDiaryInput{
+		UserID:    uuid.New(),
+		FamilyID:  uuid.New(),
 		Title:     "First Diary",
 		Content:   "First content",
-		CreatedAt: time.Now(),
+		WritingTimeSeconds: 120,
 	}
 
-	diary2 := &domain.Diary{
-		ID:        diary2ID,
+	diary2 := &usecase.CreateDiaryInput{
+		UserID:    uuid.New(),
+		FamilyID:  uuid.New(),
 		Title:     "Second Diary",
 		Content:   "Second content",
-		CreatedAt: time.Now(),
+		WritingTimeSeconds: 120,
 	}
 
 	// Setup expectations for both calls
-	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
-		return d.Title == "First Diary"
-	})).Return(diary1, nil).Once()
+	mockUsecase.On("Create", mock.Anything, diary1).Return(&domain.Diary{
+		ID:        diary1ID,
+	}, nil).Once()
 
-	mockUsecase.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
-		return d.Title == "Second Diary"
-	})).Return(diary2, nil).Once()
+	mockUsecase.On("Create", mock.Anything, diary2).Return(&domain.Diary{
+		ID:        diary2ID,
+	}, nil).Once()
 
 	// Call controller twice
-	result1, err1 := controller.Create(context.Background(), &domain.Diary{Title: "First Diary", Content: "First content"})
-	result2, err2 := controller.Create(context.Background(), &domain.Diary{Title: "Second Diary", Content: "Second content"})
+	result1, err1 := controller.Create(context.Background(), diary1.UserID, diary1.FamilyID, &dto.CreateDiaryRequest{
+		Title:   diary1.Title,
+		Content: diary1.Content,
+		WritingTimeSeconds: 120,
+	})
+	result2, err2 := controller.Create(context.Background(), diary2.UserID, diary2.FamilyID, &dto.CreateDiaryRequest{
+		Title:   diary2.Title,
+		Content: diary2.Content,
+		WritingTimeSeconds: 120,
+	})
 
 	// Verify results
 	if err1 != nil {

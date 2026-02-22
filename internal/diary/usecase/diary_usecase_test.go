@@ -103,13 +103,13 @@ func (m *MockStreakRepository) Get(ctx context.Context, userID, familyID uuid.UU
 }
 
 // Helper function to create a valid diary for testing
-func newValidDiary() *domain.Diary {
-	return &domain.Diary{
-		ID:       uuid.New(),
+func newValidDiaryInput() *CreateDiaryInput {
+	return &CreateDiaryInput{
 		UserID:   uuid.New(),
 		FamilyID: uuid.New(),
 		Title:    "Test Diary",
 		Content:  "This is a test diary content",
+		WritingTimeSeconds: 120,
 	}
 }
 
@@ -119,15 +119,14 @@ func TestDiaryUsecaseCreateValidationError(t *testing.T) {
 
 	tests := []struct {
 		name    string
-		diary   *domain.Diary
+		diary   *CreateDiaryInput
 		wantErr bool
 	}{
 		{
 			name: "empty title",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
+			diary: &CreateDiaryInput{
 				FamilyID: uuid.New(),
+				UserID:   uuid.New(),
 				Title:    "",
 				Content:  "valid content",
 			},
@@ -135,10 +134,9 @@ func TestDiaryUsecaseCreateValidationError(t *testing.T) {
 		},
 		{
 			name: "title too long",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
+			diary: &CreateDiaryInput{
 				FamilyID: uuid.New(),
+				UserID:   uuid.New(),
 				Title:    string(make([]byte, 256)),
 				Content:  "valid content",
 			},
@@ -146,10 +144,9 @@ func TestDiaryUsecaseCreateValidationError(t *testing.T) {
 		},
 		{
 			name: "empty content",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
+			diary: &CreateDiaryInput{
 				FamilyID: uuid.New(),
+				UserID:   uuid.New(),
 				Title:    "valid title",
 				Content:  "",
 			},
@@ -157,10 +154,9 @@ func TestDiaryUsecaseCreateValidationError(t *testing.T) {
 		},
 		{
 			name: "whitespace only title",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
+			diary: &CreateDiaryInput{
 				FamilyID: uuid.New(),
+				UserID:   uuid.New(),
 				Title:    "   ",
 				Content:  "valid content",
 			},
@@ -168,10 +164,9 @@ func TestDiaryUsecaseCreateValidationError(t *testing.T) {
 		},
 		{
 			name: "whitespace only content",
-			diary: &domain.Diary{
-				ID:       uuid.New(),
-				UserID:   uuid.New(),
+			diary: &CreateDiaryInput{
 				FamilyID: uuid.New(),
+				UserID:   uuid.New(),
 				Title:    "valid title",
 				Content:  "   ",
 			},
@@ -218,7 +213,13 @@ func TestDiaryUsecaseCreateRepositoryError(t *testing.T) {
 	mockPub := new(MockPublisher)
 	mockStreakRepo := new(MockStreakRepository)
 
-	diary := newValidDiary()
+	input := newValidDiaryInput()
+	diary := &domain.Diary{
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+	}
 	expectedErr := &pkgerrors.InternalError{Message: "database connection failed"}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
@@ -227,7 +228,7 @@ func TestDiaryUsecaseCreateRepositoryError(t *testing.T) {
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
-	_, err := usecase.Create(context.Background(), diary)
+	_, err := usecase.Create(context.Background(), input)
 
 	if err == nil {
 		t.Fatal("expected error, got nil")
@@ -245,39 +246,36 @@ func TestDiaryUsecase_Create_Success(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	diaryID := uuid.New()
+	// diaryID := uuid.New()
 	userID := uuid.New()
 	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       diaryID,
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
+	input := &CreateDiaryInput{
+		UserID:             userID,
+		FamilyID:           familyID,
+		Title:              "Test Diary",
+		Content:            "This is a test diary content",
+		WritingTimeSeconds: 120,
 	}
 
 	expected := &domain.Diary{
-		ID:        diaryID,
+		// ID:        diaryID,
 		UserID:    userID,
 		FamilyID:  familyID,
 		Title:     "Test Diary",
 		Content:   "This is a test diary content",
-		CreatedAt: time.Now(),
-		UpdatedAt: time.Now(),
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
-	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+	mockRepo.On("Create", mock.Anything, expected).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
 		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
-			return diaryEvent.DiaryID == diaryID && diaryEvent.UserID == userID && diaryEvent.FamilyID == familyID
+			return diaryEvent.UserID == userID && diaryEvent.FamilyID == familyID && diaryEvent.Content == "This is a test diary content" && diaryEvent.Title == "Test Diary" && diaryEvent.WritingTimeSeconds == 120
 		}
 		return false
 	})).Return(nil)
-	mockPub.On("Close").Return(nil)
 	mockStreakRepo := new(MockStreakRepository)
 	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
@@ -303,16 +301,21 @@ func TestDiaryUsecase_Create_RepositoryError(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Title:    "Test Diary",
-		Content:  "This is a test diary",
+	input := &CreateDiaryInput{
+		UserID:             uuid.New(),
+		FamilyID:           uuid.New(),
+		Title:              "Test Diary",
+		Content:            "This is a test diary",
+		WritingTimeSeconds: 120,
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
-	mockRepo.On("Create", mock.Anything, input).Return(nil, &pkgerrors.InternalError{Message: "database connection failed"})
+	mockRepo.On("Create", mock.Anything, &domain.Diary{
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+}).Return(nil, &pkgerrors.InternalError{Message: "database connection failed"})
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
@@ -336,19 +339,24 @@ func TestDiaryUsecaseCreateContextCancelled(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Title:    "Test Diary",
-		Content:  "This is a test diary",
+	input := &CreateDiaryInput{
+		UserID:             uuid.New(),
+		FamilyID:           uuid.New(),
+		Title:              "Test Diary",
+		Content:            "This is a test diary",
+		WritingTimeSeconds: 120,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
 	mockTm.On("BeginTx", mock.Anything).Return(ctx, nil)
-	mockRepo.On("Create", mock.Anything, input).Return(nil, context.Canceled)
+	mockRepo.On("Create", mock.Anything, &domain.Diary{
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+	}).Return(nil, context.Canceled)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
@@ -411,12 +419,12 @@ func TestDiaryUsecaseCreateAlreadyPostedToday(t *testing.T) {
 	userID := uuid.New()
 	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary",
+	input := &CreateDiaryInput{
+		UserID:             userID,
+		FamilyID:           familyID,
+		Title:              "Test Diary",
+		Content:            "This is a test diary",
+		WritingTimeSeconds: 120,
 	}
 
 	// fixed clock matching the usecase expectation (2026-02-03)
@@ -424,7 +432,7 @@ func TestDiaryUsecaseCreateAlreadyPostedToday(t *testing.T) {
 	clk := &clock.Fixed{Time: fixed}
 
 	// existing diary for today
-	existing := &domain.Diary{ID: uuid.New(), UserID: userID, FamilyID: familyID, Title: "old", Content: "old"}
+	existing := &domain.Diary{ID: uuid.New(), UserID: userID, FamilyID: familyID, Title: "old", Content: "old", WritingTimeSeconds: 120}
 
 	// Expect List called to check today's diaries and return one
 	expectedStart := time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)
@@ -461,28 +469,25 @@ func TestDiaryUsecase_Create_PublishEvent(t *testing.T) {
 	mockPub := new(MockPublisher)
 
 	diaryID := uuid.New()
-	userID := uuid.New()
-	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       diaryID,
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	expected := &domain.Diary{
 		ID:        diaryID,
-		UserID:    userID,
-		FamilyID:  familyID,
-		Title:     "Test Diary",
-		Content:   "This is a test diary content",
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+	mockRepo.On("Create", mock.Anything, &domain.Diary{
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+	}).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	// Verify that Publish is called with correct event
@@ -490,17 +495,17 @@ func TestDiaryUsecase_Create_PublishEvent(t *testing.T) {
 	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
 		if diaryEvent, ok := event.(*domain.DiaryCreatedEvent); ok {
 			capturedEvent = diaryEvent
-			return diaryEvent.DiaryID == diaryID && diaryEvent.UserID == userID && diaryEvent.FamilyID == familyID && diaryEvent.Content == "This is a test diary content"
+			return diaryEvent.UserID == input.UserID && diaryEvent.FamilyID == input.FamilyID && diaryEvent.Content == input.Content && diaryEvent.Title == input.Title && diaryEvent.WritingTimeSeconds == input.WritingTimeSeconds
 		}
 		return false
 	})).Return(nil)
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
-	mockPub.On("Close").Return(nil)
+	// mockPub.On("Close").Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
@@ -512,8 +517,6 @@ func TestDiaryUsecase_Create_PublishEvent(t *testing.T) {
 	assert.NotNil(t, result)
 	assert.NotNil(t, capturedEvent)
 	assert.Equal(t, diaryID, capturedEvent.DiaryID)
-	assert.Equal(t, userID, capturedEvent.UserID)
-	assert.Equal(t, familyID, capturedEvent.FamilyID)
 	assert.Equal(t, "This is a test diary content", capturedEvent.Content)
 	mockPub.AssertExpectations(t)
 }
@@ -526,28 +529,25 @@ func TestDiaryUsecase_Create_PublishEventError(t *testing.T) {
 	mockPub := new(MockPublisher)
 
 	diaryID := uuid.New()
-	userID := uuid.New()
-	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       diaryID,
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	expected := &domain.Diary{
 		ID:        diaryID,
-		UserID:    userID,
-		FamilyID:  familyID,
-		Title:     "Test Diary",
-		Content:   "This is a test diary content",
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	mockRepo.On("Create", mock.Anything, input).Return(expected, nil)
+	mockRepo.On("Create", mock.Anything, &domain.Diary{
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+	}).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	// Simulate publisher error
@@ -564,7 +564,7 @@ func TestDiaryUsecase_Create_PublishEventError(t *testing.T) {
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, &clock.Real{})
 
@@ -585,13 +585,7 @@ func TestDiaryUsecase_Create_NilPublisher(t *testing.T) {
 	mockRepo := new(MockDiaryRepository)
 	mockTm := new(MockTransactionManager)
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   uuid.New(),
-		FamilyID: uuid.New(),
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	// Create usecase with nil publisher
 	mockStreakRepo := new(MockStreakRepository)
@@ -756,37 +750,29 @@ func TestDiaryUsecase_Create_CommitOnSuccess(t *testing.T) {
 	mockPub := new(MockPublisher)
 
 	diaryID := uuid.New()
-	userID := uuid.New()
-	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       diaryID,
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	expected := &domain.Diary{
 		ID:        diaryID,
-		UserID:    userID,
-		FamilyID:  familyID,
-		Title:     "Test Diary",
-		Content:   "This is a test diary content",
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockRepo.On("Create", mock.Anything, mock.MatchedBy(func(d *domain.Diary) bool {
-		return d.UserID == userID && d.FamilyID == familyID
+		return d.UserID == input.UserID && d.FamilyID == input.FamilyID
 	})).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.MatchedBy(func(s *domain.Streak) bool {
-		return s.UserID == userID && s.FamilyID == familyID
+		return s.UserID == input.UserID && s.FamilyID == input.FamilyID
 	})).Return(&domain.Streak{}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.MatchedBy(func(event interface{}) bool {
@@ -818,16 +804,7 @@ func TestDiaryUsecase_Create_RollbackOnDiaryCreateError(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	userID := uuid.New()
-	familyID := uuid.New()
-
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	expectedErr := &pkgerrors.InternalError{Message: "database error"}
@@ -857,23 +834,15 @@ func TestDiaryUsecase_Create_RollbackOnStreakUpdateError(t *testing.T) {
 	mockPub := new(MockPublisher)
 
 	diaryID := uuid.New()
-	userID := uuid.New()
-	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       diaryID,
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	expected := &domain.Diary{
 		ID:        diaryID,
-		UserID:    userID,
-		FamilyID:  familyID,
-		Title:     "Test Diary",
-		Content:   "This is a test diary content",
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -883,7 +852,7 @@ func TestDiaryUsecase_Create_RollbackOnStreakUpdateError(t *testing.T) {
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 	streakErr := &pkgerrors.InternalError{Message: "streak update failed"}
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(nil, streakErr)
 
@@ -918,23 +887,15 @@ func TestDiaryUsecase_Create_RollbackOnPublishError(t *testing.T) {
 	mockPub := new(MockPublisher)
 
 	diaryID := uuid.New()
-	userID := uuid.New()
-	familyID := uuid.New()
 
-	input := &domain.Diary{
-		ID:       diaryID,
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Test Diary",
-		Content:  "This is a test diary content",
-	}
+	input := newValidDiaryInput()
 
 	expected := &domain.Diary{
 		ID:        diaryID,
-		UserID:    userID,
-		FamilyID:  familyID,
-		Title:     "Test Diary",
-		Content:   "This is a test diary content",
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -943,7 +904,7 @@ func TestDiaryUsecase_Create_RollbackOnPublishError(t *testing.T) {
 	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.Anything).Return(&domain.Streak{}, nil)
 
 	publishErr := &pkgerrors.InternalError{Message: "publish failed"}
@@ -972,31 +933,32 @@ func TestDiaryUsecase_Create_StreakCalculationOnFirstEntry(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	userID := uuid.New()
-	familyID := uuid.New()
+	input := newValidDiaryInput()
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "First Diary",
-		Content:  "First diary content",
+	expected := &domain.Diary{
+		ID:        uuid.New(),
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
-	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	mockStreakRepo := new(MockStreakRepository)
 	// First entry: no existing streak
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 
 	// Should create streak with default value
 	var capturedStreak *domain.Streak
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.MatchedBy(func(s *domain.Streak) bool {
 		capturedStreak = s
-		return s.UserID == userID && s.FamilyID == familyID
+		return s.UserID == input.UserID && s.FamilyID == input.FamilyID
 	})).Return(&domain.Streak{CurrentStreak: domain.DefaultStreakValue}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
@@ -1026,43 +988,44 @@ func TestDiaryUsecase_Create_StreakIncrementOnConsecutiveEntry(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	userID := uuid.New()
-	familyID := uuid.New()
+	input := newValidDiaryInput()
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Second Diary",
-		Content:  "Second diary content",
+	expected := &domain.Diary{
+		ID:        uuid.New(),
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
-	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	// mockRepo.On("Close").Return(nil)
 
 	// Fixed time: 2026-01-15 (Thursday)
 	fixedTime := time.Date(2026, 1, 15, 10, 30, 0, 0, time.UTC)
-
+	
 	// Previous entry: yesterday 2026-01-14
 	previousPostDate := time.Date(2026, 1, 14, 9, 0, 0, 0, time.UTC)
 	existingStreak := &domain.Streak{
-		UserID:        userID,
-		FamilyID:      familyID,
+		UserID:        input.UserID,
+		FamilyID:      input.FamilyID,
 		CurrentStreak: 1,
 		LastPostDate:  &previousPostDate,
 	}
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(existingStreak, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(existingStreak, nil)
 
 	// Should increment streak to 2
 	var capturedStreak *domain.Streak
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.MatchedBy(func(s *domain.Streak) bool {
 		capturedStreak = s
-		return s.UserID == userID && s.FamilyID == familyID
+		return s.UserID == input.UserID && s.FamilyID == input.FamilyID
 	})).Return(&domain.Streak{CurrentStreak: 2}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
@@ -1091,20 +1054,21 @@ func TestDiaryUsecase_Create_StreakResetOnNonConsecutiveEntry(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	userID := uuid.New()
-	familyID := uuid.New()
+	input := newValidDiaryInput()
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "After Gap",
-		Content:  "Diary after gap",
+	expected := &domain.Diary{
+		ID:        uuid.New(),
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
 	mockTm.On("CommitTx", mock.Anything).Return(nil)
-	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 
 	// Fixed time: 2026-01-15 (Thursday)
@@ -1113,20 +1077,20 @@ func TestDiaryUsecase_Create_StreakResetOnNonConsecutiveEntry(t *testing.T) {
 	// Previous entry: 3 days ago 2026-01-12
 	previousPostDate := time.Date(2026, 1, 12, 9, 0, 0, 0, time.UTC)
 	existingStreak := &domain.Streak{
-		UserID:        userID,
-		FamilyID:      familyID,
+		UserID:        input.UserID,
+		FamilyID:      input.FamilyID,
 		CurrentStreak: 5,
 		LastPostDate:  &previousPostDate,
 	}
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(existingStreak, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(existingStreak, nil)
 
 	// Should reset streak to default
 	var capturedStreak *domain.Streak
 	mockStreakRepo.On("CreateOrUpdate", mock.Anything, mock.MatchedBy(func(s *domain.Streak) bool {
 		capturedStreak = s
-		return s.UserID == userID && s.FamilyID == familyID
+		return s.UserID == input.UserID && s.FamilyID == input.FamilyID
 	})).Return(&domain.Streak{CurrentStreak: domain.DefaultStreakValue}, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
@@ -1155,19 +1119,20 @@ func TestDiaryUsecase_Create_DuplicatePostError(t *testing.T) {
 	mockTm := new(MockTransactionManager)
 	mockPub := new(MockPublisher)
 
-	userID := uuid.New()
-	familyID := uuid.New()
+	input := newValidDiaryInput()
 
-	input := &domain.Diary{
-		ID:       uuid.New(),
-		UserID:   userID,
-		FamilyID: familyID,
-		Title:    "Duplicate Post",
-		Content:  "Duplicate diary content",
+	expected := &domain.Diary{
+		ID:        uuid.New(),
+		UserID:    input.UserID,
+		FamilyID:  input.FamilyID,
+		Title:     input.Title,
+		Content:   input.Content,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	mockTm.On("BeginTx", mock.Anything).Return(context.Background(), nil)
-	mockRepo.On("Create", mock.Anything, mock.Anything).Return(input, nil)
+	mockRepo.On("Create", mock.Anything, mock.Anything).Return(expected, nil)
 	mockRepo.On("List", mock.Anything, mock.Anything, mock.Anything).Return([]*domain.Diary{}, nil)
 	mockTm.On("RollbackTx", mock.Anything).Return(nil)
 
@@ -1177,14 +1142,14 @@ func TestDiaryUsecase_Create_DuplicatePostError(t *testing.T) {
 	// Previous entry: same day 2026-01-15
 	previousPostDate := time.Date(2026, 1, 15, 9, 0, 0, 0, time.UTC)
 	existingStreak := &domain.Streak{
-		UserID:        userID,
-		FamilyID:      familyID,
+		UserID:        input.UserID,
+		FamilyID:      input.FamilyID,
 		CurrentStreak: 3,
 		LastPostDate:  &previousPostDate,
 	}
 
 	mockStreakRepo := new(MockStreakRepository)
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(existingStreak, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(existingStreak, nil)
 
 	mockPub.On("Publish", mock.Anything, mock.Anything).Return(nil)
 
@@ -1254,17 +1219,16 @@ func TestDiaryUsecase_GetStreak_NotFound(t *testing.T) {
 	mockPub := new(MockPublisher)
 	mockStreakRepo := new(MockStreakRepository)
 
-	userID := uuid.New()
-	familyID := uuid.New()
+	input := newValidDiaryInput()
 
 	// Repository returns (nil, nil) when record not found
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, nil)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, nil)
 
 	clk := &clock.Real{}
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
 
 	// Act
-	result, err := usecase.GetStreak(context.Background(), userID, familyID)
+	result, err := usecase.GetStreak(context.Background(), input.UserID, input.FamilyID)
 
 	// Assert
 	assert.NoError(t, err)
@@ -1283,7 +1247,8 @@ func TestDiaryUsecase_GetStreak_InvalidUserID(t *testing.T) {
 	mockPub := new(MockPublisher)
 	mockStreakRepo := new(MockStreakRepository)
 
-	familyID := uuid.New()
+	input := newValidDiaryInput()
+	familyID := input.FamilyID
 
 	clk := &clock.Real{}
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
@@ -1308,7 +1273,8 @@ func TestDiaryUsecase_GetStreak_InvalidFamilyID(t *testing.T) {
 	mockPub := new(MockPublisher)
 	mockStreakRepo := new(MockStreakRepository)
 
-	userID := uuid.New()
+	input := newValidDiaryInput()
+	userID := input.UserID
 
 	clk := &clock.Real{}
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
@@ -1333,17 +1299,16 @@ func TestDiaryUsecase_GetStreak_RepositoryError(t *testing.T) {
 	mockPub := new(MockPublisher)
 	mockStreakRepo := new(MockStreakRepository)
 
-	userID := uuid.New()
-	familyID := uuid.New()
+	input := newValidDiaryInput()
 
 	repositoryErr := &pkgerrors.InternalError{Message: "database error"}
-	mockStreakRepo.On("Get", mock.Anything, userID, familyID).Return(nil, repositoryErr)
+	mockStreakRepo.On("Get", mock.Anything, input.UserID, input.FamilyID).Return(nil, repositoryErr)
 
 	clk := &clock.Real{}
 	usecase := NewDiaryUsecase(mockTm, mockRepo, mockStreakRepo, mockPub, clk)
 
 	// Act
-	result, err := usecase.GetStreak(context.Background(), userID, familyID)
+	result, err := usecase.GetStreak(context.Background(), input.UserID, input.FamilyID)
 
 	// Assert
 	assert.Error(t, err)

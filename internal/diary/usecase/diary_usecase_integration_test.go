@@ -80,7 +80,13 @@ func TestDiaryUsecaseIntegration_CreateWithTransaction(t *testing.T) {
 	usecase := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk)
 
 	// Act
-	result, err := usecase.Create(context.Background(), input)
+	result, err := usecase.Create(context.Background(), &CreateDiaryInput{
+		UserID:             input.UserID,
+		FamilyID:           input.FamilyID,
+		Title:              input.Title,
+		Content:            input.Content,
+		WritingTimeSeconds: 120,
+	})
 
 	// Assert
 	assert.NoError(t, err)
@@ -128,7 +134,13 @@ func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 		Content:  "First day entry",
 	}
 
-	result1, err := usecase1.Create(context.Background(), diary1)
+	result1, err := usecase1.Create(context.Background(), &CreateDiaryInput{
+		UserID:             diary1.UserID,
+		FamilyID:           diary1.FamilyID,
+		Title:              diary1.Title,
+		Content:            diary1.Content,
+		WritingTimeSeconds: 120,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 
@@ -149,7 +161,13 @@ func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 		Content:  "Second day entry",
 	}
 
-	result2, err := usecase2.Create(context.Background(), diary2)
+	result2, err := usecase2.Create(context.Background(), &CreateDiaryInput{
+		UserID:             diary2.UserID,
+		FamilyID:           diary2.FamilyID,
+		Title:              diary2.Title,
+		Content:            diary2.Content,
+		WritingTimeSeconds: 120,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 
@@ -170,7 +188,13 @@ func TestDiaryUsecaseIntegration_StreakCalculationFlow(t *testing.T) {
 		Content:  "Third day entry (gap of 1 day)",
 	}
 
-	result4, err := usecase4.Create(context.Background(), diary4)
+	result4, err := usecase4.Create(context.Background(), &CreateDiaryInput{
+		UserID:             diary4.UserID,
+		FamilyID:           diary4.FamilyID,
+		Title:              diary4.Title,
+		Content:            diary4.Content,
+		WritingTimeSeconds: 120,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result4)
 
@@ -205,7 +229,13 @@ func TestDiaryUsecaseIntegration_PublishEventToBroker(t *testing.T) {
 	usecase := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk)
 
 	// Act
-	result, err := usecase.Create(context.Background(), input)
+	result, err := usecase.Create(context.Background(), &CreateDiaryInput{
+		UserID:             input.UserID,
+		FamilyID:           input.FamilyID,
+		Title:              input.Title,
+		Content:            input.Content,
+		WritingTimeSeconds: 120,
+	})
 
 	// Assert - diary created
 	assert.NoError(t, err)
@@ -257,7 +287,13 @@ func TestDiaryUsecaseIntegration_StreakEventPublished(t *testing.T) {
 	clk1 := &clock.Fixed{Time: fixedTime1}
 	usecase1 := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk1)
 
-	result1, err := usecase1.Create(context.Background(), diary1)
+	result1, err := usecase1.Create(context.Background(), &CreateDiaryInput{
+		UserID:             diary1.UserID,
+		FamilyID:           diary1.FamilyID,
+		Title:              diary1.Title,
+		Content:            diary1.Content,
+		WritingTimeSeconds: 120,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result1)
 
@@ -278,7 +314,13 @@ func TestDiaryUsecaseIntegration_StreakEventPublished(t *testing.T) {
 	clk2 := &clock.Fixed{Time: fixedTime2}
 	usecase2 := NewDiaryUsecase(deps.TM, deps.DR, deps.SR, deps.Publisher, clk2)
 
-	result2, err := usecase2.Create(context.Background(), diary2)
+	result2, err := usecase2.Create(context.Background(), &CreateDiaryInput{
+		UserID:             diary2.UserID,
+		FamilyID:           diary2.FamilyID,
+		Title:              diary2.Title,
+		Content:            diary2.Content,
+		WritingTimeSeconds: 120,
+	})
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 

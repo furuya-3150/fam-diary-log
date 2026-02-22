@@ -61,12 +61,13 @@ func (u *diaryAnalysisUsecase) Analyze(ctx context.Context, event *domain.DiaryC
 
 	// Perform analysis
 	analysis := &domain.DiaryAnalysis{
-		ID:            uuid.New(),
-		DiaryID:       event.DiaryID,
-		UserID:        event.UserID,
-		FamilyID:      event.FamilyID,
-		CharCount:     len([]rune(event.Content)),
-		SentenceCount: u.countSentences(event.Content),
+		ID:                 uuid.New(),
+		DiaryID:            event.DiaryID,
+		UserID:             event.UserID,
+		FamilyID:           event.FamilyID,
+		CharCount:          len([]rune(event.Content)),
+		SentenceCount:      u.countSentences(event.Content),
+		WritingTimeSeconds: event.WritingTimeSeconds,
 	}
 
 	// Check accuracy (get suggestion count from gateway)

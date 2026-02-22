@@ -18,8 +18,17 @@ import (
 	"gorm.io/gorm"
 )
 
+// CreateDiaryInput is the input DTO for creating a diary
+type CreateDiaryInput struct {
+	FamilyID           uuid.UUID
+	UserID             uuid.UUID
+	Title              string
+	Content            string
+	WritingTimeSeconds int
+}
+
 type DiaryUsecase interface {
-	Create(ctx context.Context, d *domain.Diary) (*domain.Diary, error)
+	Create(ctx context.Context, input *CreateDiaryInput) (*domain.Diary, error)
 	List(ctx context.Context, familyID uuid.UUID, targetDate string) ([]*domain.Diary, error)
 	GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error)
 	GetStreak(ctx context.Context, userID, familyID uuid.UUID) (*domain.Streak, error)
@@ -44,7 +53,14 @@ func NewDiaryUsecase(tm db.TransactionManager, dr repository.DiaryRepository, sr
 	}
 }
 
-func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Diary, error) {
+func (du *diaryUsecase) Create(ctx context.Context, input *CreateDiaryInput) (*domain.Diary, error) {
+	d := &domain.Diary{
+		FamilyID:           input.FamilyID,
+		UserID:             input.UserID,
+		Title:              input.Title,
+		Content:            input.Content,
+	}
+
 	err := domain.ValidateCreateDiaryRequest(d)
 	if err != nil {
 		return nil, &errors.ValidationError{Message: err.Error()}
@@ -73,11 +89,6 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 		return nil, &errors.ValidationError{Message: "diary already posted today"}
 	}
 
-	// assign ID if not provided
-	if d.ID == uuid.Nil {
-		d.ID = uuid.New()
-	}
-
 	ctx, err = du.tm.BeginTx(ctx)
 	if err != nil {
 		return nil, err
@@ -99,7 +110,7 @@ func (du *diaryUsecase) Create(ctx context.Context, d *domain.Diary) (*domain.Di
 	}
 
 	// Publish diary created event
-	event := domain.NewDiaryCreatedEvent(diary.ID, diary.UserID, diary.FamilyID, diary.Content)
+	event := domain.NewDiaryCreatedEvent(diary.ID, diary.UserID, diary.FamilyID, diary.Title, diary.Content, input.WritingTimeSeconds)
 	if err := du.publisher.Publish(ctx, event); err != nil {
 		du.tm.RollbackTx(ctx)
 		slog.Error("failed to publish diary created event", "error", err.Error())
