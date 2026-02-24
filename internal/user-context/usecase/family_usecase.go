@@ -25,7 +25,7 @@ type InviteMembersInput struct {
 }
 
 type FamilyUsecase interface {
-	CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, error)
+	CreateFamily(ctx context.Context, name string, userID uuid.UUID) (accessToken string, refreshToken string, err error)
 	InviteMembers(ctx context.Context, in InviteMembersInput) error
 	ApplyToFamily(ctx context.Context, token string, userID uuid.UUID) (string, error)
 }
@@ -38,6 +38,7 @@ type familyUsecase struct {
 	tm  db.TransactionManager
 	clk clock.Clock
 	tg  jwtgen.TokenGenerator
+	rtr repository.RefreshTokenRepository
 	mp  publisher.Publisher
 }
 
@@ -49,6 +50,7 @@ func NewFamilyUsecase(
 	tm db.TransactionManager,
 	clk clock.Clock,
 	tg jwtgen.TokenGenerator,
+	rtr repository.RefreshTokenRepository,
 	mp publisher.Publisher,
 ) FamilyUsecase {
 	return &familyUsecase{
@@ -59,22 +61,23 @@ func NewFamilyUsecase(
 		tm:  tm,
 		clk: clk,
 		tg:  tg,
+		rtr: rtr,
 		mp:  mp,
 	}
 }
 
-func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, error) {
+func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, string, error) {
 	already, err := u.fmr.IsUserAlreadyMember(ctx, userID)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if already {
-		return "", &errors.ValidationError{Message: "you are already a member of a family"}
+		return "", "", &errors.ValidationError{Message: "you are already a member of a family"}
 	}
 
 	ctx, err = u.tm.BeginTx(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	family := &domain.Family{
 		Name: name,
@@ -82,7 +85,7 @@ func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uu
 	family, err = u.fr.CreateFamily(ctx, family)
 	if err != nil {
 		u.tm.RollbackTx(ctx)
-		return "", err
+		return "", "", err
 	}
 	member := &domain.FamilyMember{
 		FamilyID: family.ID,
@@ -91,15 +94,27 @@ func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uu
 	}
 	if err := u.fmr.AddFamilyMember(ctx, member); err != nil {
 		u.tm.RollbackTx(ctx)
-		return "", err
+		return "", "", err
 	}
 	u.tm.CommitTx(ctx)
-	signed, err := u.tg.GenerateToken(ctx, userID, family.ID, domain.RoleAdmin)
+	accessToken, err := u.tg.GenerateToken(ctx, userID, family.ID, domain.RoleAdmin)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
-	return signed, nil
+	rt, err := GenerateRefresToken()
+	rt.UserID = userID
+	if err != nil {
+		return "", "", err
+	}
+	if _, err := u.rtr.Create(ctx, rt); err != nil {
+		return "", "", err
+	}
+	if err != nil {
+		return "", "", err
+	}
+
+	return accessToken, rt.Token, nil
 }
 
 func (fu *familyUsecase) InviteMembers(ctx context.Context, input InviteMembersInput) error {

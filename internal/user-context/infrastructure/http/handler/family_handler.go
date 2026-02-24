@@ -48,21 +48,32 @@ func (h *familyHandler) CreateFamily(c echo.Context) error {
 		return errors.RespondWithError(c, &errors.BadRequestError{Message: "invalid request"})
 	}
 
-	token, err := h.fu.CreateFamily(ctx, req.Name, userID)
+	accessToken, refreshToken, err := h.fu.CreateFamily(ctx, req.Name, userID)
 	if err != nil {
 		return errors.RespondWithError(c, err)
 	}
 
-	accessTokenCookie := &http.Cookie{
+	cfg := config.Cfg
+
+	c.SetCookie(&http.Cookie{
 		Name:     auth.AuthCookieName,
-		Value:    token,
+		Value:    accessToken,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
 		SameSite: http.SameSiteStrictMode,
-		MaxAge:   int(config.Cfg.JWT.ExpiresIn.Seconds()),
-	}
-	c.SetCookie(accessTokenCookie)
+		MaxAge:   int(cfg.JWT.ExpiresIn.Seconds()),
+	})
+
+	c.SetCookie(&http.Cookie{
+		Name:  refreshCookieName,
+		Value: refreshToken,
+		Path:     "/auth/refresh",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(cfg.JWT.RefreshExpiresIn.Seconds()),
+	})
 
 	return response.RespondSuccess(c, http.StatusNoContent, nil)
 }

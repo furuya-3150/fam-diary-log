@@ -71,12 +71,9 @@ type MockFamilyUsecase struct {
 	mock.Mock
 }
 
-func (m *MockFamilyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, error) {
+func (m *MockFamilyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, string, error) {
 	args := m.Called(ctx, name, userID)
-	if args.Get(0) == "" {
-		return "", args.Error(1)
-	}
-	return args.Get(0).(string), args.Error(1)
+	return args.String(0), args.String(1), args.Error(2)
 }
 
 func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.InviteMembersInput) error {
@@ -111,7 +108,7 @@ func TestFamilyHandler_CreateFamily_Success(t *testing.T) {
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, userId)
 	c.SetRequest(req.WithContext(ctx))
 
-	mockUsecase.On("CreateFamily", mock.Anything, mock.Anything, mock.Anything).Return("test-token-123", nil)
+	mockUsecase.On("CreateFamily", mock.Anything, mock.Anything, mock.Anything).Return("test-token-123", "refresh-token-456", nil)
 
 	err := h.CreateFamily(c)
 	require.NoError(t, err)
@@ -120,16 +117,23 @@ func TestFamilyHandler_CreateFamily_Success(t *testing.T) {
 	// Cookie検証
 	cookies := rec.Result().Cookies()
 	require.NotEmpty(t, cookies)
-	found := false
+	foundAccess := false
+	foundRefresh := false
 	for _, ck := range cookies {
 		if ck.Name == auth.AuthCookieName {
-			found = true
+			foundAccess = true
 			require.Equal(t, "test-token-123", ck.Value)
 			require.Equal(t, "/", ck.Path)
 			require.True(t, ck.HttpOnly)
 		}
+		if ck.Name == refreshCookieName {
+			foundRefresh = true
+			require.Equal(t, "refresh-token-456", ck.Value)
+			require.True(t, ck.HttpOnly)
+		}
 	}
-	require.True(t, found, "Auth cookie not found")
+	require.True(t, foundAccess, "Auth cookie not found")
+	require.True(t, foundRefresh, "Refresh cookie not found")
 }
 
 func TestFamilyHandler_CreateFamily_Error(t *testing.T) {
@@ -153,7 +157,7 @@ func TestFamilyHandler_CreateFamily_Error(t *testing.T) {
 	ctx := context.WithValue(context.Background(), auth.ContextKeyUserID, uuid.New())
 	c.SetRequest(req.WithContext(ctx))
 
-	mockUsecase.On("CreateFamily", mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("failed to create family"))
+	mockUsecase.On("CreateFamily", mock.Anything, mock.Anything, mock.Anything).Return("", "", errors.New("failed to create family"))
 
 	err := h.CreateFamily(c)
 	require.NoError(t, err)

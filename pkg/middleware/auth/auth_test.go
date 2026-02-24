@@ -44,7 +44,7 @@ func TestJWTAuthMiddleware_ValidToken(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{
-		Name:  "auth_token",
+		Name:  "access_token",
 		Value: tokenString,
 	})
 	rec := httptest.NewRecorder()
@@ -262,7 +262,7 @@ func TestRequireRole_AdminRole(t *testing.T) {
 	e := echo.New()
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.AddCookie(&http.Cookie{
-		Name:  "auth_token",
+		Name:  "access_token",
 		Value: tokenString,
 	})
 	rec := httptest.NewRecorder()

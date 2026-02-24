@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
+	cfg "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/config"
 	jwtgen "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/jwt"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/oauth"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/repository"
@@ -18,29 +19,31 @@ import (
 type AuthUsecase interface {
 	// OAuth2 server-side flow methods
 	InitiateGoogleLogin() (authURL string, state string, err error)
-	HandleGoogleCallback(ctx context.Context, code string) (bool, string, error)
+	HandleGoogleCallback(ctx context.Context, code string) (isJoined bool, accessToken string, refreshToken string, err error)
+	RefreshToken(ctx context.Context, refreshToken string) (newAccessToken string, newRefreshToken string, err error)
 }
 
 type authUsecase struct {
 	authRepo         repository.UserRepository
 	familyMemberRepo repository.FamilyMemberRepository
+	refreshTokenRepo repository.RefreshTokenRepository
 	googleProvider   oauth.OAuthProvider
-	// jwtConfig        config.JWTConfig
 	tokenGenerator   jwtgen.TokenGenerator
 }
 
 func NewAuthUsecase(
 	userRepo repository.UserRepository,
 	familyMemberRepo repository.FamilyMemberRepository,
+	refreshTokenRepo repository.RefreshTokenRepository,
 	googleProvider oauth.OAuthProvider,
 	tokenGenerator jwtgen.TokenGenerator,
 ) AuthUsecase {
 	return &authUsecase{
 		authRepo:         userRepo,
 		familyMemberRepo: familyMemberRepo,
+		refreshTokenRepo: refreshTokenRepo,
 		googleProvider:   googleProvider,
 		tokenGenerator:   tokenGenerator,
-		// jwtConfig:      cfg.JWT,
 	}
 }
 
@@ -92,22 +95,21 @@ func (u *authUsecase) InitiateGoogleLogin() (string, string, error) {
 var Counter = 0
 
 // HandleGoogleCallback handles the OAuth callback from Google
-func (u *authUsecase) HandleGoogleCallback(ctx context.Context, code string) (bool, string, error) {
+func (u *authUsecase) HandleGoogleCallback(ctx context.Context, code string) (bool, string, string, error) {
 	slog.Debug("HandleGoogleCallback: start", "code", Counter)
 	Counter++
 	// Exchange code for user info
 	userInfo, err := u.googleProvider.ExchangeCode(ctx, code)
 	if err != nil {
 		slog.Error("failed to exchange Google code", "Error", err)
-		return false, "", &pkgerrors.ValidationError{Message: fmt.Sprintf("failed to exchange Google code: %v", err)}
+		return false, "", "", &pkgerrors.ValidationError{Message: fmt.Sprintf("failed to exchange Google code: %v", err)}
 	}
 	slog.Debug("Google user info fetched", "userInfo", userInfo)
 
 	// Check if user exists by provider ID
 	existingUser, err := u.authRepo.GetUserByProviderID(ctx, domain.AuthProviderGoogle, userInfo.ProviderID)
-
 	if err != nil {
-		return false, "", &pkgerrors.InternalError{Message: "failed to get user"}
+		return false, "", "", &pkgerrors.InternalError{Message: "failed to get user"}
 	}
 
 	var user *domain.User
@@ -119,12 +121,12 @@ func (u *authUsecase) HandleGoogleCallback(ctx context.Context, code string) (bo
 		// New user, check if email already exists with different provider
 		existingEmailUser, err := u.authRepo.GetUserByEmail(ctx, userInfo.Email)
 		if err != nil {
-			return false, "", &pkgerrors.InternalError{Message: "failed to check existing email"}
+			return false, "", "", &pkgerrors.InternalError{Message: "failed to check existing email"}
 		}
 
 		if existingEmailUser != nil {
 			// Email already exists with different provider
-			return false, "", &pkgerrors.ValidationError{
+			return false, "", "", &pkgerrors.ValidationError{
 				Message: fmt.Sprintf("email %s is already registered with %s", userInfo.Email, existingEmailUser.Provider),
 			}
 		}
@@ -142,28 +144,112 @@ func (u *authUsecase) HandleGoogleCallback(ctx context.Context, code string) (bo
 
 		user, err = u.authRepo.CreateUser(ctx, user)
 		if err != nil {
-			return false, "", &pkgerrors.InternalError{Message: "failed to create user"}
+			return false, "", "", &pkgerrors.InternalError{Message: "failed to create user"}
 		}
 	}
 
 	member, err := u.familyMemberRepo.GetFamilyMemberByUserID(ctx, user.ID)
 	if err != nil {
-		return false, "", err
+		return false, "", "", err
 	}
 	var familyId uuid.UUID
-	var isJoined bool	
+	var isJoined bool
 	var role domain.Role
 	if member != nil {
 		familyId = member.FamilyID
 		isJoined = true
 		role = member.Role
 	}
-	
+
 	// Generate access token
-	token, err := u.tokenGenerator.GenerateToken(ctx, user.ID, familyId, role)
+	accessToken, err := u.tokenGenerator.GenerateToken(ctx, user.ID, familyId, role)
 	if err != nil {
-		return false, "", &pkgerrors.InternalError{Message: "failed to generate access token"}
+		return false, "", "", &pkgerrors.InternalError{Message: "failed to generate access token"}
 	}
 
-	return isJoined, token, nil
+	// Generate and store refresh token
+	refreshToken, err := u.issueRefreshToken(ctx, user.ID)
+	if err != nil {
+		return false, "", "", err
+	}
+
+	return isJoined, accessToken, refreshToken, nil
+}
+
+// RefreshToken validates the given refresh token and issues a new token pair (rotation).
+func (u *authUsecase) RefreshToken(ctx context.Context, refreshToken string) (string, string, error) {
+	rt, err := u.refreshTokenRepo.GetByToken(ctx, refreshToken)
+	if err != nil {
+		return "", "", &pkgerrors.InternalError{Message: "failed to look up refresh token"}
+	}
+	if rt == nil || rt.Revoked {
+		// TODO: 不正なトークンでDBアクセスした際、管理者に通知する仕組みを入れる（攻撃の可能性があるため）
+		return "", "", &pkgerrors.UnauthorizedError{Message: "invalid or revoked refresh token"}
+	}
+	if time.Now().After(rt.ExpiresAt) {
+		return "", "", &pkgerrors.UnauthorizedError{Message: "refresh token has expired"}
+	}
+
+	// Load user and family membership
+	user, err := u.authRepo.GetUserByID(ctx, rt.UserID)
+	if err != nil || user == nil {
+		return "", "", &pkgerrors.InternalError{Message: "failed to load user"}
+	}
+
+	member, err := u.familyMemberRepo.GetFamilyMemberByUserID(ctx, user.ID)
+	if err != nil {
+		return "", "", err
+	}
+	var familyId uuid.UUID
+	var role domain.Role
+	if member != nil {
+		familyId = member.FamilyID
+		role = member.Role
+	}
+
+	// Issue new access token
+	newAccessToken, err := u.tokenGenerator.GenerateToken(ctx, user.ID, familyId, role)
+	if err != nil {
+		return "", "", &pkgerrors.InternalError{Message: "failed to generate access token"}
+	}
+
+	// Revoke old refresh token (token rotation)
+	if err := u.refreshTokenRepo.Revoke(ctx, rt.ID); err != nil {
+		return "", "", &pkgerrors.InternalError{Message: "failed to revoke old refresh token"}
+	}
+
+	// Issue new refresh token
+	newRefreshToken, err := u.issueRefreshToken(ctx, user.ID)
+	if err != nil {
+		return "", "", err
+	}
+
+	return newAccessToken, newRefreshToken, nil
+}
+
+// issueRefreshToken generates a random opaque token, stores it, and returns the token string.
+func (u *authUsecase) issueRefreshToken(ctx context.Context, userID uuid.UUID) (string, error) {
+	rt, err := GenerateRefresToken()
+	rt.UserID = userID
+	if err != nil {
+		return "", err
+	}
+	if _, err := u.refreshTokenRepo.Create(ctx, rt); err != nil {
+		return "", &pkgerrors.InternalError{Message: "failed to store refresh token"}
+	}
+	return rt.Token, nil
+}
+
+func GenerateRefresToken() (*domain.RefreshToken, error) {
+	tokenStr, err := random.GenerateRandomBase64String(48)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	c := cfg.Cfg
+	rt := &domain.RefreshToken{
+		Token:     tokenStr,
+		ExpiresAt: time.Now().Add(c.JWT.RefreshExpiresIn),
+	}
+	return rt, nil
 }

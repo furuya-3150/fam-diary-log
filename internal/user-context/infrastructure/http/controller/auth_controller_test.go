@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
-	"time"
 
-	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
-	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,12 +20,17 @@ func (m *MockAuthUsecase) InitiateGoogleLogin() (authURL string, state string, e
 	return args.String(0), args.String(1), args.Error(2)
 }
 
-func (m *MockAuthUsecase) HandleGoogleCallback(ctx context.Context, code string) (bool, string, error) {
+func (m *MockAuthUsecase) HandleGoogleCallback(ctx context.Context, code string) (bool, string, string, error) {
 	args := m.Called(ctx, code)
 	if args.Get(0) == nil {
-		return false, "", args.Error(2)
+		return false, "", "", args.Error(3)
 	}
-	return args.Bool(0), args.String(1), args.Error(2)
+	return args.Bool(0), args.String(1), args.String(2), args.Error(3)
+}
+
+func (m *MockAuthUsecase) RefreshToken(ctx context.Context, refreshToken string) (string, string, error) {
+	args := m.Called(ctx, refreshToken)
+	return args.String(0), args.String(1), args.Error(2)
 }
 
 func TestAuthController_InitiateGoogleLogin(t *testing.T) {
@@ -95,7 +97,7 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			name: "正常に認証レスポンスを返す",
 			code: "valid-auth-code",
 			setupMock: func(m *MockAuthUsecase, ctx context.Context, code string) {
-				m.On("HandleGoogleCallback", ctx, code).Return(false, "jwt-access-token", nil)
+				m.On("HandleGoogleCallback", ctx, code).Return(false, "jwt-access-token", "jwt-refresh-token", nil)
 			},
 			wantErr: false,
 			validate: func(t *testing.T, m *MockAuthUsecase, err error) {
@@ -107,7 +109,7 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			code: "invalid-code",
 			setupMock: func(m *MockAuthUsecase, ctx context.Context, code string) {
 				m.On("HandleGoogleCallback", ctx, code).
-					Return(false, "", errors.New("invalid authorization code"))
+					Return(false, "", "", errors.New("invalid authorization code"))
 			},
 			wantErr: true,
 			validate: func(t *testing.T, m *MockAuthUsecase, err error) {
@@ -119,7 +121,7 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			code: "",
 			setupMock: func(m *MockAuthUsecase, ctx context.Context, code string) {
 				m.On("HandleGoogleCallback", ctx, code).
-					Return(false, "", errors.New("code cannot be empty"))
+					Return(false, "", "", errors.New("code cannot be empty"))
 			},
 			wantErr: true,
 			validate: func(t *testing.T, m *MockAuthUsecase, err error) {
@@ -136,15 +138,17 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 
 			controller := NewAuthController(mockUsecase)
 
-			isJoined, token, err := controller.HandleGoogleCallback(ctx, tt.code)
+			isJoined, token, refreshToken, err := controller.HandleGoogleCallback(ctx, tt.code)
 
 			if tt.wantErr {
 				assert.Error(t, err)
 				assert.Equal(t, "", token)
+				assert.Equal(t, "", refreshToken)
 				assert.Equal(t, false, isJoined)
 			} else {
 				assert.NoError(t, err)
 				require.NotEmpty(t, token)
+				require.NotEmpty(t, refreshToken)
 				assert.Equal(t, false, isJoined)
 			}
 
@@ -152,33 +156,4 @@ func TestAuthController_HandleGoogleCallback(t *testing.T) {
 			mockUsecase.AssertExpectations(t)
 		})
 	}
-}
-
-func TestAuthController_toAuthResponse(t *testing.T) {
-	mockUsecase := new(MockAuthUsecase)
-	controller := NewAuthController(mockUsecase).(*authController)
-
-	userID := uuid.New()
-	now := time.Now()
-
-	domainResp := &domain.AuthResponse{
-		User: &domain.User{
-			ID:         userID,
-			Email:      "test@example.com",
-			Name:       "Test User",
-			Provider:   domain.AuthProviderGoogle,
-			CreatedAt:  now,
-			UpdatedAt:  now,
-		},
-		AccessToken: "test-access-token",
-	}
-
-	dtoResp := controller.toAuthResponse(domainResp)
-
-	assert.NotNil(t, dtoResp)
-	assert.NotNil(t, dtoResp.User)
-	assert.Equal(t, userID, dtoResp.User.ID)
-	assert.Equal(t, "test@example.com", dtoResp.User.Email)
-	assert.Equal(t, "Test User", dtoResp.User.Name)
-	assert.Equal(t, "test-access-token", dtoResp.AccessToken)
 }
