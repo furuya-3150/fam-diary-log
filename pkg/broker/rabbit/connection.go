@@ -2,6 +2,7 @@ package rabbit
 
 import (
 	"fmt"
+	"log/slog"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -22,6 +23,18 @@ func NewConnection(config Config) (*amqp.Connection, error) {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 	}
 
+	closeCh := make(chan *amqp.Error)
+	conn.NotifyClose(closeCh)
+
+	go func() {
+		err := <-closeCh
+		if err != nil {
+			slog.Warn("rabbitmq connection closed", "err", err)
+		} else {
+			slog.Warn("rabbitmq connection closed")
+		}
+	}()
+
 	return conn, nil
 }
 
@@ -39,14 +52,14 @@ func DeclareExchange(ch *amqp.Channel, name, kind string) error {
 }
 
 // DeclareQueue declares a queue
-func DeclareQueue(ch *amqp.Channel, name string) (amqp.Queue, error) {
+func DeclareQueue(ch *amqp.Channel, name string, args amqp.Table) (amqp.Queue, error) {
 	return ch.QueueDeclare(
 		name,  // name
 		true,  // durable
 		false, // delete when unused
 		false, // exclusive
 		false, // no-wait
-		nil,   // arguments
+		args,  // arguments
 	)
 }
 

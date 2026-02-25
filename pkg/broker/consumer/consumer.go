@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -28,10 +29,11 @@ type Consumer interface {
 
 // Config holds configuration for RabbitMQConsumer
 type Config struct {
-	ExchangeName string
-	ExchangeKind string
-	QueueName    string
-	RoutingKeys  []string // multiple routing keys to bind
+	ExchangeName    string
+	ExchangeKind    string
+	QueueName       string
+	RoutingKeys     []string      // multiple routing keys to bind
+	ConsumerTimeout time.Duration // RabbitMQ broker-side consumer timeout via x-consumer-timeout (0 = broker default)
 }
 
 // RabbitMQConsumer implements Consumer for RabbitMQ
@@ -82,7 +84,13 @@ func (c *RabbitMQConsumer) Start(ctx context.Context) error {
 	}
 
 	// Declare queue
-	q, err := rabbit.DeclareQueue(c.ch, c.config.QueueName)
+	var queueArgs amqp.Table
+	if c.config.ConsumerTimeout > 0 {
+		queueArgs = amqp.Table{
+			"x-consumer-timeout": c.config.ConsumerTimeout.Milliseconds(),
+		}
+	}
+	q, err := rabbit.DeclareQueue(c.ch, c.config.QueueName, queueArgs)
 	if err != nil {
 		return fmt.Errorf("failed to declare queue: %w", err)
 	}
@@ -115,11 +123,29 @@ func (c *RabbitMQConsumer) Start(ctx context.Context) error {
 
 	c.l.Info("consumer started", "queue", q.Name, "routing_keys", c.config.RoutingKeys)
 
+	// Connection/Channel の切断を監視
+	connCloseCh := c.conn.NotifyClose(make(chan *amqp.Error, 1))
+	chCloseCh := c.ch.NotifyClose(make(chan *amqp.Error, 1))
+	go func() {
+		select {
+		case err := <-connCloseCh:
+			if err != nil {
+				c.l.Error("rabbitmq connection closed", "code", err.Code, "reason", err.Reason)
+			}
+		case err := <-chCloseCh:
+			if err != nil {
+				c.l.Error("rabbitmq channel closed", "code", err.Code, "reason", err.Reason)
+			}
+		case <-ctx.Done():
+		}
+	}()
+
 	// Handle messages
 	go func() {
 		for msg := range msgs {
 			c.handleMessage(ctx, msg)
 		}
+		c.l.Error("consumer msgs channel closed", "queue", c.config.QueueName)
 	}()
 
 	return nil
@@ -127,13 +153,15 @@ func (c *RabbitMQConsumer) Start(ctx context.Context) error {
 
 // handleMessage handles a single message
 func (c *RabbitMQConsumer) handleMessage(ctx context.Context, msg amqp.Delivery) {
-	// Get routing key from message
 	routingKey := msg.RoutingKey
+	start := time.Now()
 
-
-	// Handle event
 	if err := c.handler.Handle(ctx, routingKey, msg.Body); err != nil {
-		c.l.Error("failed to handle event", "routing_key", routingKey, "error", err.Error())
+		c.l.Error("failed to handle event",
+			"routing_key", routingKey,
+			"elapsed", time.Since(start).String(),
+			"error", err.Error(),
+		)
 		msg.Nack(false, true) // Nack and requeue
 		return
 	}
@@ -143,7 +171,7 @@ func (c *RabbitMQConsumer) handleMessage(ctx context.Context, msg amqp.Delivery)
 		c.l.Error("failed to acknowledge message", "error", err.Error())
 	}
 
-	c.l.Info("event processed", "routing_key", routingKey)
+	c.l.Info("event processed", "routing_key", routingKey, "elapsed", time.Since(start).String())
 }
 
 // Stop stops the consumer
