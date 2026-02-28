@@ -96,9 +96,9 @@ func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uu
 		u.tm.RollbackTx(ctx)
 		return "", "", err
 	}
-	u.tm.CommitTx(ctx)
 	accessToken, err := u.tg.GenerateToken(ctx, userID, family.ID, domain.RoleAdmin)
 	if err != nil {
+		u.tm.RollbackTx(ctx)
 		return "", "", err
 	}
 
@@ -108,11 +108,10 @@ func (u *familyUsecase) CreateFamily(ctx context.Context, name string, userID uu
 		return "", "", err
 	}
 	if _, err := u.rtr.Create(ctx, rt); err != nil {
+		u.tm.RollbackTx(ctx)
 		return "", "", err
 	}
-	if err != nil {
-		return "", "", err
-	}
+	u.tm.CommitTx(ctx)
 
 	return accessToken, rt.Token, nil
 }
