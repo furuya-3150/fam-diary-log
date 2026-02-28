@@ -70,8 +70,9 @@ func (du *diaryUsecase) Create(ctx context.Context, input *CreateDiaryInput) (*d
 	}
 
 	now := du.clk.Now()
-	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, now.Location())
+	jst, _ := time.LoadLocation("Asia/Tokyo")
+	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jst)
+	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, jst)
 
 	query := &domain.DiarySearchCriteria{
 		FamilyID:  d.FamilyID,
@@ -123,7 +124,8 @@ func (du *diaryUsecase) Create(ctx context.Context, input *CreateDiaryInput) (*d
 }
 
 func (du *diaryUsecase) updateStreak(ctx context.Context, userID, familyID uuid.UUID) error {
-	todayDate := du.clk.Now().Truncate(24 * time.Hour)
+	jst, _ := time.LoadLocation("Asia/Tokyo")
+	todayDate := du.clk.Now().In(jst).Truncate(24 * time.Hour)
 
 	// Get existing streak
 	existingStreak, err := du.sr.Get(ctx, userID, familyID)
