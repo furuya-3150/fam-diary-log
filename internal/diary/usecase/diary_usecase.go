@@ -70,7 +70,11 @@ func (du *diaryUsecase) Create(ctx context.Context, input *CreateDiaryInput) (*d
 	}
 
 	now := du.clk.Now()
-	jst, _ := time.LoadLocation("Asia/Tokyo")
+	jst, err := time.LoadLocation("Asia/Tokyo")
+	if err != nil {
+		return nil, err
+	}
+	
 	startOfDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, jst)
 	endOfDay := time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, 0, jst)
 

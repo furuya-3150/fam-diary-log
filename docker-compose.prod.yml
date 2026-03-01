@@ -1,0 +1,112 @@
+version: '3'
+
+volumes:
+# TODO: delete -2
+  fam-diary-log-api_postgres-2:
+    driver: local
+  fam-diary-log-api_rabbitmq:
+    driver: local
+
+services:
+  db:
+    image: postgres:16
+    restart: always
+    volumes:
+# TODO: delete -2
+      - fam-diary-log-api_postgres-2:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_PASSWORD}
+    volumes:
+      - fam-diary-log-api_rabbitmq:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+
+  diary-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod-diary-api
+    restart: always
+    env_file:
+      - ./cmd/diary-api/.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+      - rabbitmq
+
+  diary-analyzer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod-diary-analyzer
+    restart: always
+    env_file:
+      - ./cmd/diary-analyzer/.env
+    depends_on:
+      - db
+      - rabbitmq
+
+  diary-analysis:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod-diary-analysis
+    restart: always
+    env_file:
+      - ./cmd/diary-analysis/.env
+    ports:
+      - "8081:8081"
+    depends_on:
+      - db
+      - rabbitmq
+
+  user-context:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod-user-context
+    restart: always
+    env_file:
+      - ./cmd/user-context/.env
+    ports:
+      - "8082:8082"
+    depends_on:
+      - db
+      - rabbitmq
+
+  diary-mailer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod-diary-mailer
+    restart: always
+    env_file:
+      - ./cmd/diary-mailer/.env
+    depends_on:
+      - rabbitmq
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod-migrate
+    profiles:
+      - migrate
+    environment:
+      - DIARY_DATABASE_URL=postgres://${DIARY_DB_USER}:${DIARY_DB_PASSWORD}@db:5432/diary?sslmode=disable
+      - DIARY_ANALYZER_DATABASE_URL=postgres://${DIARY_ANALYZER_DB_USER}:${DIARY_ANALYZER_DB_PASSWORD}@db:5432/diary_analyze?sslmode=disable
+      - USER_CONTEXT_DATABASE_URL=postgres://${USER_CONTEXT_DB_USER}:${USER_CONTEXT_DB_PASSWORD}@db:5432/user_context?sslmode=disable
+    depends_on:
+      - db
