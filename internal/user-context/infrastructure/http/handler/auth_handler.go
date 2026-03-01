@@ -13,10 +13,14 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+const refreshCookieName = "refresh_token"
+
 type AuthHandler interface {
 	// OAuth2 server-side flow handlers
 	InitiateGoogleLogin(c echo.Context) error
 	GoogleCallback(c echo.Context) error
+	// Refresh validates the refresh token cookie and issues a new access token.
+	Refresh(c echo.Context) error
 }
 
 type authHandler struct {
@@ -86,22 +90,34 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 		slog.Error("failed to clear OAuth state from session", "Error", err)
 	}
 
-	_, token, err := h.authController.HandleGoogleCallback(c.Request().Context(), code)
+	_, accessToken, refreshToken, err := h.authController.HandleGoogleCallback(c.Request().Context(), code)
 	if err != nil {
 		return errors.RespondWithError(c, err)
 	}
 
+	cfg := config.Cfg
+
 	// Set access token in HTTPOnly Cookie
-	accessTokenCookie := &http.Cookie{
+	c.SetCookie(&http.Cookie{
 		Name:     auth.AuthCookieName,
-		Value:    token,
+		Value:    accessToken,
 		Path:     "/",
-		HttpOnly: true,                          // JavaScriptからアクセス不可（XSS対策）
-		Secure:   true,                          // HTTPS通信のみ
-		SameSite: http.SameSiteStrictMode,       // CSRF対策
-		MaxAge:   int(config.Cfg.JWT.ExpiresIn), // トークンの有効期限
-	}
-	c.SetCookie(accessTokenCookie)
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(cfg.JWT.ExpiresIn.Seconds()),
+	})
+
+	// Set refresh token in HTTPOnly Cookie (longer-lived, restricted to refresh endpoint)
+	c.SetCookie(&http.Cookie{
+		Name:  refreshCookieName,
+		Value: refreshToken,
+		Path:     "/auth/refresh",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(cfg.JWT.RefreshExpiresIn.Seconds()),
+	})
 
 	// セッションを削除
 	sess.Options.MaxAge = -1
@@ -109,5 +125,44 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 		slog.Error("failed to delete session", "Error", err)
 	}
 
-	return c.Redirect(http.StatusTemporaryRedirect, config.Cfg.ClientApp.URL)
+	return c.Redirect(http.StatusTemporaryRedirect, cfg.ClientApp.URL+"/auth/callback")
+}
+
+// Refresh validates the refresh token cookie and issues a new token pair.
+func (h *authHandler) Refresh(c echo.Context) error {
+	cookie, err := c.Cookie(refreshCookieName)
+	if err != nil || cookie.Value == "" {
+		return errors.RespondWithError(c, &pkgerrors.UnauthorizedError{Message: "missing refresh token"})
+	}
+
+	cfg := config.Cfg
+
+	newAccessToken, newRefreshToken, err := h.authController.RefreshToken(c.Request().Context(), cookie.Value)
+	if err != nil {
+		return errors.RespondWithError(c, err)
+	}
+
+	// Overwrite access token cookie
+	c.SetCookie(&http.Cookie{
+		Name:     auth.AuthCookieName,
+		Value:    newAccessToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(cfg.JWT.ExpiresIn.Seconds()),
+	})
+
+	// Rotate refresh token cookie
+	c.SetCookie(&http.Cookie{
+		Name:     refreshCookieName,
+		Value:    newRefreshToken,
+		Path:     "/auth/refresh",
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int(cfg.JWT.RefreshExpiresIn.Seconds()),
+	})
+
+	return c.NoContent(http.StatusNoContent)
 }

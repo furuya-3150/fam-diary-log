@@ -2,12 +2,19 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/domain"
 	"github.com/furuya-3150/fam-diary-log/pkg/db"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
+
+// UserWithRole represents a user with their role in a family
+type UserWithRole struct {
+	User *domain.User
+	Role domain.Role
+}
 
 type UserRepository interface {
 	CreateUser(ctx context.Context, user *domain.User) (*domain.User, error)
@@ -16,6 +23,7 @@ type UserRepository interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
 	UpdateUser(ctx context.Context, user *domain.User) (*domain.User, error)
 	GetAdminUsersByFamilyID(ctx context.Context, familyID uuid.UUID) ([]*domain.User, error)
+	GetUsersByFamilyID(ctx context.Context, familyID uuid.UUID, userFields []string, familyMemberFields []string) ([]*UserWithRole, error)
 }
 
 type userRepository struct {
@@ -93,4 +101,65 @@ func (r *userRepository) GetAdminUsersByFamilyID(ctx context.Context, familyID u
 		return nil, err
 	}
 	return users, nil
+}
+
+func (r *userRepository) GetUsersByFamilyID(ctx context.Context, familyID uuid.UUID, userFields []string, familyMemberFields []string) ([]*UserWithRole, error) {
+	dbConn := r.dm.DB(ctx)
+
+	// SELECT句を構築
+	var selectFields []string
+	for _, field := range userFields {
+		selectFields = append(selectFields, "users."+field)
+	}
+	for _, field := range familyMemberFields {
+		selectFields = append(selectFields, "family_members."+field)
+	}
+
+	// クエリ実行用の一時構造体
+	type queryResult struct {
+		// User fields
+		ID         uuid.UUID           `gorm:"column:id"`
+		Email      string              `gorm:"column:email"`
+		Name       string              `gorm:"column:name"`
+		Provider   domain.AuthProvider `gorm:"column:provider"`
+		ProviderID string              `gorm:"column:provider_id"`
+		CreatedAt  time.Time           `gorm:"column:created_at"`
+		UpdatedAt  time.Time           `gorm:"column:updated_at"`
+		// FamilyMember fields
+		Role domain.Role `gorm:"column:role"`
+	}
+
+	var results []queryResult
+	err := dbConn.Table("users").
+		Joins("INNER JOIN family_members ON users.id = family_members.user_id").
+		Where("family_members.family_id = ?", familyID).
+		Select(selectFields).
+		Scan(&results).Error
+
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return []*UserWithRole{}, nil
+		}
+		return nil, err
+	}
+
+	// queryResultをUserWithRoleに変換
+	usersWithRoles := make([]*UserWithRole, len(results))
+	for i, r := range results {
+		user := &domain.User{
+			ID:         r.ID,
+			Email:      r.Email,
+			Name:       r.Name,
+			Provider:   r.Provider,
+			ProviderID: r.ProviderID,
+			CreatedAt:  r.CreatedAt,
+			UpdatedAt:  r.UpdatedAt,
+		}
+		usersWithRoles[i] = &UserWithRole{
+			User: user,
+			Role: r.Role,
+		}
+	}
+
+	return usersWithRoles, nil
 }

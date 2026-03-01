@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
@@ -22,8 +22,8 @@ type MockDiaryController struct {
 	mock.Mock
 }
 
-func (m *MockDiaryController) Create(ctx context.Context, d *domain.Diary) (*dto.DiaryResponse, error) {
-	args := m.Called(ctx, d)
+func (m *MockDiaryController) Create(ctx context.Context, userID, familyID uuid.UUID, req *dto.CreateDiaryRequest) (*dto.DiaryResponse, error) {
+	args := m.Called(ctx, userID, familyID, req)
 	if args.Get(0) == nil {
 		return nil, args.Error(1)
 	}
@@ -38,8 +38,8 @@ func (m *MockDiaryController) List(ctx context.Context, familyID uuid.UUID, targ
 	return args.Get(0).([]dto.DiaryResponse), args.Error(1)
 }
 
-func (m *MockDiaryController) GetCount(ctx context.Context, familyID uuid.UUID, year, month string) (int, error) {
-	args := m.Called(ctx, familyID, year, month)
+func (m *MockDiaryController) GetCount(ctx context.Context, familyID, userID uuid.UUID, year, month string) (int, error) {
+	args := m.Called(ctx, familyID, userID, year, month)
 	return args.Int(0), args.Error(1)
 }
 
@@ -62,9 +62,10 @@ func TestDiaryHandler_Create_Success(t *testing.T) {
 	userID := uuid.New()
 	diaryID := uuid.New()
 
-	requestBody := &domain.Diary{
+	requestBody := dto.CreateDiaryRequest{
 		Title:   "Test Diary",
 		Content: "This is a test diary",
+		WritingTimeSeconds: 120,
 	}
 
 	expectedResponse := &dto.DiaryResponse{
@@ -77,12 +78,11 @@ func TestDiaryHandler_Create_Success(t *testing.T) {
 
 	mockController.On("Create", mock.MatchedBy(func(ctx context.Context) bool {
 		return ctx.Value(auth.ContextKeyFamilyID) == familyID && ctx.Value(auth.ContextKeyUserID) == userID
-	}), mock.MatchedBy(func(d *domain.Diary) bool {
-		return d.Title == requestBody.Title && d.Content == requestBody.Content
-	})).Return(expectedResponse, nil)
+	}), userID, familyID, &requestBody).Return(expectedResponse, nil)
 
 	// Create request
 	body, _ := json.Marshal(requestBody)
+	log.Printf("Request body: %s", string(body))
 	req := httptest.NewRequest(http.MethodPost, "/families/me/diaries", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 
@@ -132,13 +132,14 @@ func TestDiaryHandler_Create_ValidationError(t *testing.T) {
 	familyID := uuid.New()
 	userID := uuid.New()
 
-	requestBody := &domain.Diary{
+	requestBody := &dto.CreateDiaryRequest{
 		Title:   "",
 		Content: "Valid content",
+		WritingTimeSeconds: 120,
 	}
 
-	validationErr := &errors.ValidationError{Message: "title cannot be empty"}
-	mockController.On("Create", mock.Anything, mock.Anything).Return(nil, validationErr)
+	// validationErr := &errors.ValidationError{Message: "title cannot be empty"}
+	// mockController.On("Create", mock.Anything, userID, familyID, requestBody).Return(nil, validationErr)
 
 	// Create request
 	body, _ := json.Marshal(requestBody)
@@ -175,7 +176,7 @@ func TestDiaryHandler_Create_ValidationError(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	mockController.AssertExpectations(t)
+	// mockController.AssertExpectations(t)
 }
 
 // create diary with internal error
@@ -188,13 +189,14 @@ func TestDiaryHandler_Create_InternalError(t *testing.T) {
 	familyID := uuid.New()
 	userID := uuid.New()
 
-	requestBody := &domain.Diary{
+	requestBody := &dto.CreateDiaryRequest{
 		Title:   "Test Diary",
 		Content: "This is a test diary",
+		WritingTimeSeconds: 120,
 	}
 
 	internalErr := &errors.InternalError{Message: "database error"}
-	mockController.On("Create", mock.Anything, mock.Anything).Return(nil, internalErr)
+	mockController.On("Create", mock.Anything, userID, familyID, requestBody).Return(nil, internalErr)
 
 	// Create request
 	body, _ := json.Marshal(requestBody)
@@ -475,12 +477,14 @@ func TestDiaryHandler_GetCount_Success(t *testing.T) {
 	handler := NewDiaryHandler(mockController)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
-	mockController.On("GetCount", mock.Anything, familyID, "2026", "01").Return(5, nil)
+	mockController.On("GetCount", mock.Anything, familyID, userID, "2026", "01").Return(5, nil)
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/families/me/diaries/count?year=2026&month=01", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -512,12 +516,14 @@ func TestDiaryHandler_GetCount_InvalidParams(t *testing.T) {
 	handler := NewDiaryHandler(mockController)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
-	mockController.On("GetCount", mock.Anything, familyID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
+	mockController.On("GetCount", mock.Anything, familyID, userID, "2026", "13").Return(0, &errors.ValidationError{Message: "invalid month"})
 
 	// Create HTTP request
 	req := httptest.NewRequest("GET", "/families/me/diaries/count?year=2026&month=13", nil)
 	ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+	ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 	req = req.WithContext(ctx)
 
 	// Create response writer
@@ -544,6 +550,7 @@ func TestDiaryHandler_GetCount_MissingParams(t *testing.T) {
 	handler := NewDiaryHandler(mockController)
 
 	familyID := uuid.New()
+	userID := uuid.New()
 
 	testCases := []struct {
 		name string
@@ -559,6 +566,7 @@ func TestDiaryHandler_GetCount_MissingParams(t *testing.T) {
 			// Create HTTP request
 			req := httptest.NewRequest("GET", tc.url, nil)
 			ctx := context.WithValue(req.Context(), auth.ContextKeyFamilyID, familyID)
+			ctx = context.WithValue(ctx, auth.ContextKeyUserID, userID)
 			req = req.WithContext(ctx)
 
 			// Create response writer

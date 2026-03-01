@@ -29,8 +29,17 @@ func (User) TableName() string {
 	return "users"
 }
 
-// AuthResponse represents authentication response
-type AuthResponse struct {
-	User        *User      `json:"user"`
-	AccessToken string     `json:"access_token"`
+// RefreshToken represents a refresh token stored in the DB
+type RefreshToken struct {
+	ID        uuid.UUID `json:"id"         gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	UserID    uuid.UUID `json:"user_id"    gorm:"type:uuid;not null;index"`
+	Token     string    `json:"token"      gorm:"type:varchar(512);uniqueIndex;not null"`
+	ExpiresAt time.Time `json:"expires_at" gorm:"not null"`
+	Revoked   bool      `json:"revoked"    gorm:"default:false"`
+	CreatedAt time.Time `json:"created_at" gorm:"autoCreateTime"`
+}
+
+// TableName specifies the table name for RefreshToken model
+func (RefreshToken) TableName() string {
+	return "refresh_tokens"
 }

@@ -16,12 +16,12 @@ type MockFamilyUsecase struct {
 	mock.Mock
 }
 
-func (m *MockFamilyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, error) {
+func (m *MockFamilyUsecase) CreateFamily(ctx context.Context, name string, userID uuid.UUID) (string, string, error) {
 	args := m.Called(ctx, name, userID)
 	if args.Get(0) == "" {
-		return "", args.Error(1)
+		return "", "", args.Error(2)
 	}
-	return args.Get(0).(string), args.Error(1)
+	return args.Get(0).(string), args.Get(1).(string), args.Error(2)
 }
 
 func (m *MockFamilyUsecase) InviteMembers(ctx context.Context, in usecase.InviteMembersInput) error {

@@ -11,6 +11,7 @@ import (
 
 	controller_dto "github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
+	"github.com/go-playground/validator/v10"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/mock"
@@ -42,7 +43,10 @@ func (m *MockUserController) GetProfile(ctx context.Context, userID uuid.UUID) (
 func TestUserHandler_EditProfile_Success(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockUserController)
-	h := &userHandler{userController: mockController}
+	h := &userHandler{
+		userController: mockController,
+		validate:       validator.New(),
+	}
 
 	reqBody := &controller_dto.EditUserRequest{
 		ID:    uuid.Nil,
@@ -71,18 +75,23 @@ func TestUserHandler_EditProfile_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	var got controller_dto.UserResponse
+	var got map[string]interface{}
 	err = json.Unmarshal(rec.Body.Bytes(), &got)
 	require.NoError(t, err)
-	require.Equal(t, expected.Email, got.Email)
-	require.Equal(t, expected.Name, got.Name)
+	data, ok := got["data"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, expected.Email, data["email"])
+	require.Equal(t, expected.Name, data["name"])
 	mockController.AssertExpectations(t)
 }
 
 func TestUserHandler_EditProfile_BadRequest(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockUserController)
-	h := &userHandler{userController: mockController}
+	h := &userHandler{
+		userController: mockController,
+		validate:       validator.New(),
+	}
 
 	req := httptest.NewRequest(http.MethodPut, "/users/me", bytes.NewReader([]byte("invalid json")))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -105,7 +114,10 @@ func TestUserHandler_EditProfile_BadRequest(t *testing.T) {
 func TestUserHandler_EditProfile_ControllerError(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockUserController)
-	h := &userHandler{userController: mockController}
+	h := &userHandler{
+		userController: mockController,
+		validate:       validator.New(),
+	}
 
 	reqBody := &controller_dto.EditUserRequest{
 		ID:    controller_dto.EditUserRequest{}.ID,
@@ -138,7 +150,10 @@ func TestUserHandler_EditProfile_ControllerError(t *testing.T) {
 func TestUserHandler_GetProfile_Success(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockUserController)
-	h := &userHandler{userController: mockController}
+	h := &userHandler{
+		userController: mockController,
+		validate:       validator.New(),
+	}
 
 	userID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/users/me", nil)
@@ -157,17 +172,22 @@ func TestUserHandler_GetProfile_Success(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, rec.Code)
 
-	var got controller_dto.UserResponse
+	var got map[string]interface{}
 	err = json.Unmarshal(rec.Body.Bytes(), &got)
 	require.NoError(t, err)
-	require.Equal(t, expected.Email, got.Email)
+	data, ok := got["data"].(map[string]interface{})
+	require.True(t, ok)
+	require.Equal(t, expected.Email, data["email"])
 	mockController.AssertExpectations(t)
 }
 
 func TestUserHandler_GetProfile_BadRequest(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockUserController)
-	h := &userHandler{userController: mockController}
+	h := &userHandler{
+		userController: mockController,
+		validate:       validator.New(),
+	}
 
 	req := httptest.NewRequest(http.MethodGet, "/users/me", nil)
 	rec := httptest.NewRecorder()
@@ -189,7 +209,10 @@ func TestUserHandler_GetProfile_BadRequest(t *testing.T) {
 func TestUserHandler_GetProfile_ControllerError(t *testing.T) {
 	e := echo.New()
 	mockController := new(MockUserController)
-	h := &userHandler{userController: mockController}
+	h := &userHandler{
+		userController: mockController,
+		validate:       validator.New(),
+	}
 
 	userID := uuid.New()
 	req := httptest.NewRequest(http.MethodGet, "/users/me", nil)

@@ -16,5 +16,6 @@ type DiarySearchCriteria struct {
 // DiaryCountCriteria represents the criteria for counting diaries
 type DiaryCountCriteria struct {
 	FamilyID  uuid.UUID
+	UserID    uuid.UUID
 	YearMonth string
 }

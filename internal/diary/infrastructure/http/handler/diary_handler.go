@@ -1,10 +1,11 @@
 package handler
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
+	"strings"
 
-	"github.com/furuya-3150/fam-diary-log/internal/diary/domain"
 	"github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller"
 	dto "github.com/furuya-3150/fam-diary-log/internal/diary/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
@@ -17,53 +18,85 @@ import (
 
 // DiaryHandler handles HTTP requests for diary operations
 type DiaryHandler struct {
-	dc controller.DiaryController
+	dc       controller.DiaryController
+	validate *validator.Validate
 }
 
 // NewDiaryHandler creates a new instance of DiaryHandler
 func NewDiaryHandler(dc controller.DiaryController) *DiaryHandler {
 	return &DiaryHandler{
-		dc: dc,
+		dc:       dc,
+		validate: validator.New(),
 	}
 }
 
 func (dh *DiaryHandler) Create(e echo.Context) error {
-	var req *domain.Diary
+	var req dto.CreateDiaryRequest
 	if err := e.Bind(&req); err != nil {
-		log.Println("bind error", err)
-		validationErr := &errors.ValidationError{Message: err.Error()}
+		slog.Debug("bind error", "error", err)
+		validationErr := &errors.ValidationError{Message: "invalid request body: " + err.Error()}
 		return errors.RespondWithError(e, validationErr)
 	}
-	req.FamilyID = e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
-	req.UserID = e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
 
-	res, err := dh.dc.Create(e.Request().Context(), req)
+	// バリデーション実行
+	if err := dh.validate.Struct(&req); err != nil {
+		if validationErrors, ok := err.(validator.ValidationErrors); ok {
+			// バリデーションエラーを人間が読める形式に変換
+			errorMessages := make([]string, 0, len(validationErrors))
+			for _, fieldError := range validationErrors {
+				errorMessages = append(errorMessages, formatValidationError(fieldError))
+			}
+			return errors.RespondWithError(e, &errors.ValidationError{
+				Message: fmt.Sprintf("validation failed: %s", strings.Join(errorMessages, ", ")),
+			})
+		}
+		return errors.RespondWithError(e, &errors.ValidationError{Message: "validation failed: " + err.Error()})
+	}
+
+	// コンテキストからuserIDとfamilyIDを取得
+	userID := e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
+	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
+
+	res, err := dh.dc.Create(e.Request().Context(), userID, familyID, &req)
 	if err != nil {
-		log.Println("controller create error", err)
+		slog.Error("controller create error", "error", err.Error())
 		return errors.RespondWithError(e, err)
 	}
 
 	return response.RespondSuccess(e, http.StatusOK, res)
 }
 
+// formatValidationError converts validator.FieldError to a human-readable message
+func formatValidationError(fe validator.FieldError) string {
+	switch fe.Tag() {
+	case "required":
+		return fmt.Sprintf("%s is required", fe.Field())
+	case "min":
+		return fmt.Sprintf("%s must be at least %s", fe.Field(), fe.Param())
+	case "max":
+		return fmt.Sprintf("%s must be at most %s", fe.Field(), fe.Param())
+	default:
+		return fmt.Sprintf("%s is invalid", fe.Field())
+	}
+}
+
 func (dh *DiaryHandler) List(e echo.Context) error {
 	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
 
-	log.Println("List diaries for family_id:", familyID)
-	// validate query
 	q := dto.DiaryListQuery{TargetDate: e.QueryParam("target_date")}
 	v := validator.New()
 	if err := v.Struct(q); err != nil {
 		validationErr := &errors.ValidationError{Message: "target_date is required and must be YYYY-MM-DD"}
+		slog.Debug("validation error", "error", err.Error())
 		return errors.RespondWithError(e, validationErr)
 	}
-	log.Println("Query parameters validated successfully:", q)
+	slog.Debug("Query parameters validated successfully", "query", q)
 
 	ctx := e.Request().Context()
 
 	res, err := dh.dc.List(ctx, familyID, q.TargetDate)
 	if err != nil {
-		log.Println("controller list error", err)
+		slog.Error("controller list error", "error", err.Error())
 		return errors.RespondWithError(e, err)
 	}
 
@@ -72,6 +105,7 @@ func (dh *DiaryHandler) List(e echo.Context) error {
 
 func (dh *DiaryHandler) GetCount(e echo.Context) error {
 	familyID := e.Request().Context().Value(auth.ContextKeyFamilyID).(uuid.UUID)
+	userID := e.Request().Context().Value(auth.ContextKeyUserID).(uuid.UUID)
 	yearStr := e.QueryParam("year")
 	monthStr := e.QueryParam("month")
 
@@ -81,9 +115,10 @@ func (dh *DiaryHandler) GetCount(e echo.Context) error {
 		return errors.RespondWithError(e, validationErr)
 	}
 
-	count, err := dh.dc.GetCount(e.Request().Context(), familyID, yearStr, monthStr)
+	count, err := dh.dc.GetCount(e.Request().Context(), familyID, userID, yearStr, monthStr)
+	slog.Debug("GetCount result", "familyID", familyID, "userID", userID, "year", yearStr, "month", monthStr, "count", count)
 	if err != nil {
-		log.Println("controller get count error", err)
+		slog.Error("controller get count error", "error", err.Error())
 		return errors.RespondWithError(e, err)
 	}
 
@@ -96,7 +131,7 @@ func (dh *DiaryHandler) GetStreak(e echo.Context) error {
 
 	res, err := dh.dc.GetStreak(e.Request().Context(), userID, familyID)
 	if err != nil {
-		log.Println("controller get streak error", err)
+		slog.Error("controller get streak error", "error", err.Error())
 		return errors.RespondWithError(e, err)
 	}
 

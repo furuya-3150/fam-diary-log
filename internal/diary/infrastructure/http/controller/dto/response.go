@@ -6,13 +6,20 @@ import (
 	"github.com/google/uuid"
 )
 
+// CreateDiaryRequest represents a request to create a diary
+type CreateDiaryRequest struct {
+	Title              string `json:"title" validate:"required,min=1,max=255"`
+	Content            string `json:"content" validate:"required,min=1"`
+	WritingTimeSeconds int    `json:"writing_time_seconds" validate:"required,min=0"`
+}
+
 type DiaryResponse struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	FamilyID  uuid.UUID
-	Title     string
-	Content   string
-	CreatedAt time.Time
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	FamilyID  uuid.UUID `json:"family_id"`
+	Title     string    `json:"title"`
+	Content   string    `json:"content"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type StreakResponse struct {

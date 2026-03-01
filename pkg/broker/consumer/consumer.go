@@ -2,8 +2,11 @@ package consumer
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
+	"sync"
+	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 
@@ -12,6 +15,7 @@ import (
 
 const (
 	DefaultExchangeKind = "topic"
+	DefaultMaxRetries   = 3
 )
 
 // EventHandler defines the interface for handling events
@@ -28,19 +32,23 @@ type Consumer interface {
 
 // Config holds configuration for RabbitMQConsumer
 type Config struct {
-	ExchangeName string
-	ExchangeKind string
-	QueueName    string
-	RoutingKeys  []string // multiple routing keys to bind
+	ExchangeName    string
+	ExchangeKind    string
+	QueueName       string
+	RoutingKeys     []string      // multiple routing keys to bind
+	ConsumerTimeout time.Duration // RabbitMQ broker-side consumer timeout via x-consumer-timeout (0 = broker default)
+	MaxRetries      int           // max retry count on handler error (0 = DefaultMaxRetries)
 }
 
 // RabbitMQConsumer implements Consumer for RabbitMQ
 type RabbitMQConsumer struct {
-	conn    *amqp.Connection
-	ch      *amqp.Channel
-	config  Config
-	handler EventHandler
-	l       *slog.Logger
+	conn        *amqp.Connection
+	ch          *amqp.Channel
+	config      Config
+	handler     EventHandler
+	l           *slog.Logger
+	retryCounts map[string]int
+	retryMu     sync.Mutex
 }
 
 // NewRabbitMQConsumer creates a new RabbitMQConsumer
@@ -57,6 +65,9 @@ func NewRabbitMQConsumer(conn *amqp.Connection, config Config, handler EventHand
 	if config.ExchangeKind == "" {
 		config.ExchangeKind = DefaultExchangeKind
 	}
+	if config.MaxRetries == 0 {
+		config.MaxRetries = DefaultMaxRetries
+	}
 
 	ch, err := conn.Channel()
 	if err != nil {
@@ -64,11 +75,12 @@ func NewRabbitMQConsumer(conn *amqp.Connection, config Config, handler EventHand
 	}
 
 	consumer := &RabbitMQConsumer{
-		conn:    conn,
-		ch:      ch,
-		config:  config,
-		handler: handler,
-		l:       l,
+		conn:        conn,
+		ch:          ch,
+		config:      config,
+		handler:     handler,
+		l:           l,
+		retryCounts: make(map[string]int),
 	}
 
 	return consumer, nil
@@ -82,7 +94,13 @@ func (c *RabbitMQConsumer) Start(ctx context.Context) error {
 	}
 
 	// Declare queue
-	q, err := rabbit.DeclareQueue(c.ch, c.config.QueueName)
+	var queueArgs amqp.Table
+	if c.config.ConsumerTimeout > 0 {
+		queueArgs = amqp.Table{
+			"x-consumer-timeout": c.config.ConsumerTimeout.Milliseconds(),
+		}
+	}
+	q, err := rabbit.DeclareQueue(c.ch, c.config.QueueName, queueArgs)
 	if err != nil {
 		return fmt.Errorf("failed to declare queue: %w", err)
 	}
@@ -115,35 +133,85 @@ func (c *RabbitMQConsumer) Start(ctx context.Context) error {
 
 	c.l.Info("consumer started", "queue", q.Name, "routing_keys", c.config.RoutingKeys)
 
+	// Connection/Channel の切断を監視
+	connCloseCh := c.conn.NotifyClose(make(chan *amqp.Error, 1))
+	chCloseCh := c.ch.NotifyClose(make(chan *amqp.Error, 1))
+	go func() {
+		select {
+		case err := <-connCloseCh:
+			if err != nil {
+				c.l.Error("rabbitmq connection closed", "code", err.Code, "reason", err.Reason)
+			}
+		case err := <-chCloseCh:
+			if err != nil {
+				c.l.Error("rabbitmq channel closed", "code", err.Code, "reason", err.Reason)
+			}
+		case <-ctx.Done():
+		}
+	}()
+
 	// Handle messages
 	go func() {
 		for msg := range msgs {
 			c.handleMessage(ctx, msg)
 		}
+		c.l.Error("consumer msgs channel closed", "queue", c.config.QueueName)
 	}()
 
 	return nil
 }
 
+// msgKey はメッセージの内容からカウンター用のキーを生成する
+func msgKey(msg amqp.Delivery) string {
+	h := sha256.Sum256(msg.Body)
+	return fmt.Sprintf("%x", h)
+}
+
 // handleMessage handles a single message
 func (c *RabbitMQConsumer) handleMessage(ctx context.Context, msg amqp.Delivery) {
-	// Get routing key from message
 	routingKey := msg.RoutingKey
+	start := time.Now()
+	key := msgKey(msg)
 
-
-	// Handle event
 	if err := c.handler.Handle(ctx, routingKey, msg.Body); err != nil {
-		c.l.Error("failed to handle event", "routing_key", routingKey, "error", err.Error())
-		msg.Nack(false, true) // Nack and requeue
+		c.retryMu.Lock()
+		c.retryCounts[key]++
+		current := c.retryCounts[key]
+		c.retryMu.Unlock()
+
+		c.l.Error("failed to handle event",
+			"routing_key", routingKey,
+			"elapsed", time.Since(start).String(),
+			"retry_count", current,
+			"error", err.Error(),
+		)
+
+		if current >= c.config.MaxRetries {
+			c.l.Error("max retries exceeded, discarding message",
+				"routing_key", routingKey,
+				"max_retries", c.config.MaxRetries,
+			)
+			c.retryMu.Lock()
+			delete(c.retryCounts, key)
+			c.retryMu.Unlock()
+			msg.Nack(false, false) // 上限超過 → 破棄
+			return
+		}
+
+		msg.Nack(false, true) // 上限未満 → requeue
 		return
 	}
 
-	// Acknowledge message
+	// 成功時はカウンターをクリア
+	c.retryMu.Lock()
+	delete(c.retryCounts, key)
+	c.retryMu.Unlock()
+
 	if err := msg.Ack(false); err != nil {
 		c.l.Error("failed to acknowledge message", "error", err.Error())
 	}
 
-	c.l.Info("event processed", "routing_key", routingKey)
+	c.l.Info("event processed", "routing_key", routingKey, "elapsed", time.Since(start).String())
 }
 
 // Stop stops the consumer

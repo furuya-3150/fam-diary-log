@@ -4,12 +4,12 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- family_membersテーブル作成
 CREATE TABLE
   family_members (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     family_id UUID NOT NULL,
     user_id UUID NOT NULL,
     role INT NOT NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     UNIQUE (family_id, user_id)
   );
 

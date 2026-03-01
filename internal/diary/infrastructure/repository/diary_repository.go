@@ -77,9 +77,14 @@ func (dr *diaryRepository) GetCount(ctx context.Context, criteria *domain.DiaryC
 
 	q := db.Model(&domain.Diary{}).Where("family_id = ?", criteria.FamilyID)
 
+	if criteria.UserID != uuid.Nil {
+		q = q.Where("user_id = ?", criteria.UserID)
+	}
+
 	// Filter by YearMonth in YYYY-MM format using to_char
 	q = q.Where("to_char(created_at, 'YYYY-MM') = ?", criteria.YearMonth)
 
+		// TODO: 不正なトークンでDBアクセスした際、管理者に通知する仕組みを入れる（攻撃の可能性があるため）
 	err := q.Count(&count).Error
 	if err != nil {
 		return 0, err

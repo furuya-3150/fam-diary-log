@@ -4,8 +4,8 @@ CREATE TABLE
     family_id UUID NOT NULL,
     current_streak INTEGER NOT NULL DEFAULT 0,
     last_post_date DATE NULL,
-    created_at TIMESTAMP NOT NULL,
-    updated_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (user_id, family_id)
   );
 

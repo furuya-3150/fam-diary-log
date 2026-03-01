@@ -14,7 +14,8 @@ import (
 type contextKey string
 
 const (
-	AuthCookieName = "auth_token"
+	AuthCookieName = "access_token"
+	RefreshCookieName = "refresh_token"
 )
 
 const (
@@ -66,6 +67,7 @@ func JWTAuthMiddleware(jwtSecret string) echo.MiddlewareFunc {
 			log.Println("JWTAuthMiddleware called")
 			// Extract JWT from cookie
 			cookie, err := c.Cookie(AuthCookieName)
+			log.Println("Extracted cookie:", cookie, "error:", err)
 			if err != nil {
 				return errors.RespondWithError(c, &errors.UnauthorizedError{Message: "missing authentication cookie"})
 			}

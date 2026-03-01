@@ -43,19 +43,20 @@ func NewRouter() *echo.Echo {
 
 	// Auth
 	authRepo := repository.NewUserRepository(dbManager)
-	authUsecase := usecase.NewAuthUsecase(authRepo, familyMemberRepo, googleProvider, tokenGenerator)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(dbManager)
+	authUsecase := usecase.NewAuthUsecase(authRepo, familyMemberRepo, refreshTokenRepo, googleProvider, tokenGenerator)
 	authController := controller.NewAuthController(authUsecase)
 	authHandler := handler.NewAuthHandler(authController)
 
 	// User
 	userUsecase := usecase.NewUserUsecase(authRepo, txManager)
 	userController := controller.NewUserController(userUsecase)
-	userHandler := handler.NewUserHandler(userController)
+	userHandler := handler.NewUserHandler(userController, userUsecase)
 
 	// mail broker publisher
 	pub := broker.NewDiaryMailerPublisher(slog.Default())
 
-	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, authRepo, txManager, &clock.Real{}, tokenGenerator, pub)
+	familyUsecase := usecase.NewFamilyUsecase(familyRepo, familyMemberRepo, familyInvitationRepo, authRepo, txManager, &clock.Real{}, tokenGenerator, refreshTokenRepo, pub)
 	familyController := controller.NewFamilyController(familyUsecase)
 	familyHandler := handler.NewFamilyHandler(familyController, familyUsecase)
 
@@ -90,9 +91,10 @@ func NewRouter() *echo.Echo {
 	})
 
 	// Authentication routes - Google OAuth2 server-side flow only
-	auth := e.Group("/auth")
-	auth.GET("/google", authHandler.InitiateGoogleLogin)
-	auth.GET("/google/callback", authHandler.GoogleCallback)
+	authGroup := e.Group("/auth")
+	authGroup.GET("/google", authHandler.InitiateGoogleLogin)
+	authGroup.GET("/google/callback", authHandler.GoogleCallback)
+	authGroup.POST("/refresh", authHandler.Refresh)
 
 	// User routes
 	users := e.Group("/users")
@@ -105,6 +107,7 @@ func NewRouter() *echo.Echo {
 	families.POST("", familyHandler.CreateFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
 	families.POST("/me/invitations", familyHandler.InviteMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 	families.POST("/join-requests", familyHandler.ApplyToFamily, middAuth.JWTAuthMiddleware(cfg.JWT.Secret))
+	families.GET("/me/members", userHandler.GetFamilyMembers, middAuth.JWTAuthMiddleware(cfg.JWT.Secret), middAuth.RequireFamily())
 
 	// Notification settings routes
 	notifications := e.Group("/families/me/settings")

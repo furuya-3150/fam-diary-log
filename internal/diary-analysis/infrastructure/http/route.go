@@ -37,7 +37,7 @@ func NewRouter() *echo.Echo {
 	})
 
 	// diary analyses - authenticated user's family context
-	analyses := e.Group("/families/me/diaries/analyses")
+	analyses := e.Group("/families/me/analyzed-diaries")
 	analyses.Use(auth.JWTAuthMiddleware(cfg.JWT.Secret), auth.RequireFamily())
 	analyses.GET("/weekly-char-count", diaryAnalysisHandler.GetWeekCharCount)
 	analyses.GET("/weekly-sentence-count", diaryAnalysisHandler.GetWeekSentenceCount)

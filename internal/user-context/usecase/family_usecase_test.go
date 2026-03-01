@@ -145,6 +145,7 @@ func newTestEnv() (context.Context,
 	*MockUserRepository,
 	*MockTxManager,
 	*MockTokenGen,
+	*MockRefreshTokenRepository,
 	*MockWSPblisher,
 	*MockMailPublisher,
 	FamilyUsecase) {
@@ -155,17 +156,18 @@ func newTestEnv() (context.Context,
 	ur := new(MockUserRepository)
 	tm := new(MockTxManager)
 	tg := new(MockTokenGen)
+	rtr := new(MockRefreshTokenRepository)
 	wsp := new(MockWSPblisher)
 	mp := new(MockMailPublisher)
 
-	u := NewFamilyUsecase(fr, fmr, fir, ur, tm, &clock.Fixed{}, tg, mp)
+	u := NewFamilyUsecase(fr, fmr, fir, ur, tm, &clock.Fixed{}, tg, rtr, mp)
 	ctx := context.Background()
 
-	return ctx, fr, fmr, fir, ur, tm, tg, wsp, mp, u
+	return ctx, fr, fmr, fir, ur, tm, tg, rtr, wsp, mp, u
 }
 
 func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, tg, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, tg, rtr, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -175,27 +177,29 @@ func TestFamilyUsecase_CreateFamily_Success(t *testing.T) {
 	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
 	tm.On("CommitTx", ctx).Return(nil)
 	tg.On("GenerateToken", ctx, mock.Anything, mock.Anything, mock.Anything).Return("signed", nil)
+	rtr.On("Create", ctx, mock.AnythingOfType("*domain.RefreshToken")).Return(&domain.RefreshToken{Token: "refresh-token"}, nil)
 
-	_, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, _, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.NoError(t, err)
 	fr.AssertExpectations(t)
 	fmr.AssertExpectations(t)
 	tm.AssertExpectations(t)
 	tg.AssertExpectations(t)
+	rtr.AssertExpectations(t)
 }
 
 func TestFamilyUsecase_CreateFamily_AlreadyMember(t *testing.T) {
-	ctx, _, fmr, _, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, _, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(true, nil)
 
-	_, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, _, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
 }
 
 func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -203,12 +207,12 @@ func TestFamilyUsecase_CreateFamily_RepoError(t *testing.T) {
 	fr.On("CreateFamily", ctx, mock.AnythingOfType("*domain.Family")).Return(nil, errors.New("repo error"))
 	tm.On("RollbackTx", ctx).Return(nil)
 
-	_, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, _, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
 }
 
 func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, _, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -218,12 +222,12 @@ func TestFamilyUsecase_CreateFamily_AddMemberError(t *testing.T) {
 	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(errors.New("add member error"))
 	tm.On("RollbackTx", ctx).Return(nil)
 
-	_, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, _, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
 }
 
 func TestFamilyUsecase_CreateFamily_TokenGenerationError(t *testing.T) {
-	ctx, fr, fmr, _, _, tm, tg, _, _, u := newTestEnv()
+	ctx, fr, fmr, _, _, tm, tg, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 
 	fmr.On("IsUserAlreadyMember", ctx, userID).Return(false, nil)
@@ -231,16 +235,16 @@ func TestFamilyUsecase_CreateFamily_TokenGenerationError(t *testing.T) {
 	family := &domain.Family{ID: uuid.New(), Name: "TestFamily"}
 	fr.On("CreateFamily", ctx, mock.AnythingOfType("*domain.Family")).Return(family, nil)
 	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
-	tm.On("CommitTx", ctx).Return(nil)
+	tm.On("RollbackTx", ctx).Return(nil)
 	tg.On("GenerateToken", ctx, mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("token generation error"))
 
-	_, err := u.CreateFamily(ctx, "TestFamily", userID)
+	_, _, err := u.CreateFamily(ctx, "TestFamily", userID)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "token generation error")
 }
 
 func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
-	ctx, fr, _, fir, ur, _, _, _, mp, u := newTestEnv()
+	ctx, fr, _, fir, ur, _, _, _, _, mp, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -248,7 +252,7 @@ func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 	fir.On("FindInvitationByFamilyID", mock.Anything, familyID).Return(nil, nil)
 	fir.On("CreateInvitation", mock.Anything, mock.AnythingOfType("*domain.FamilyInvitation")).Return(nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
-	mp.On("Close").Return(nil)
+	// mp.On("Close").Return(nil)
 	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
 	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 
@@ -262,7 +266,7 @@ func TestFamilyUsecase_InviteMembers_CreateSuccess(t *testing.T) {
 
 // InviteMembers: 正常系 - 既存更新
 func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
-	ctx, fr, _, fir, ur, _, _, _, mp, u := newTestEnv()
+	ctx, fr, _, fir, ur, _, _, _, _, mp, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -272,7 +276,7 @@ func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
 	ur.On("GetUserByID", mock.Anything, inviterID).Return(&domain.User{ID: inviterID, Email: "hoge@example.com"}, nil)
 	fr.On("GetFamilyByID", mock.Anything, familyID).Return(&domain.Family{ID: familyID, Name: "TestFamily"}, nil)
 	mp.On("Publish", mock.Anything, mock.Anything).Return(nil)
-	mp.On("Close").Return(nil)
+	// mp.On("Close").Return(nil)
 
 	err := u.InviteMembers(ctx, InviteMembersInput{FamilyID: familyID, InviterUserID: inviterID, Emails: []string{"a@example.com"}})
 	require.NoError(t, err)
@@ -284,7 +288,7 @@ func TestFamilyUsecase_InviteMembers_UpdateExistingSuccess(t *testing.T) {
 
 // InviteMembers: 異常系 - Findでエラー
 func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -296,7 +300,7 @@ func TestFamilyUsecase_InviteMembers_FindError(t *testing.T) {
 
 // InviteMembers: 異常系 - Createでエラー
 func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -309,7 +313,7 @@ func TestFamilyUsecase_InviteMembers_CreateError(t *testing.T) {
 
 // InviteMembers: 異常系 - Updateでエラー
 func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	familyID := uuid.New()
 	inviterID := uuid.New()
 
@@ -322,7 +326,7 @@ func TestFamilyUsecase_InviteMembers_UpdateError(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
-	ctx, _, fmr, fir, ur, _, tg, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, tg, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-123"
 	familyID := uuid.New()
@@ -352,7 +356,7 @@ func TestFamilyUsecase_ApplyToFamily_Success(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-404"
 
@@ -364,7 +368,7 @@ func TestFamilyUsecase_ApplyToFamily_NotFound(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
-	ctx, _, _, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, _, fir, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-err"
 
@@ -375,7 +379,7 @@ func TestFamilyUsecase_ApplyToFamily_FindError(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
-	ctx, _, fmr, fir, _, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, _, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-exist"
 	familyID := uuid.New()
@@ -396,7 +400,7 @@ func TestFamilyUsecase_ApplyToFamily_AlreadyMember(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_EmailNotInvited(t *testing.T) {
-	ctx, _, fmr, fir, ur, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-not-invited"
 	familyID := uuid.New()
@@ -418,7 +422,7 @@ func TestFamilyUsecase_ApplyToFamily_EmailNotInvited(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_AddMemberError(t *testing.T) {
-	ctx, _, fmr, fir, ur, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-add-err"
 	familyID := uuid.New()
@@ -452,7 +456,7 @@ func TestFamilyUsecase_ApplyToFamily_ExpiredToken(t *testing.T) {
 
 	// Clockを2025年1月1日に設定
 	fixedClock := &clock.Fixed{Time: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
-	u := NewFamilyUsecase(fr, fmr, fir, ur, tm, fixedClock, tg, mp)
+	u := NewFamilyUsecase(fr, fmr, fir, ur, tm, fixedClock, tg, new(MockRefreshTokenRepository), mp)
 
 	ctx := context.Background()
 	userID := uuid.New()
@@ -474,7 +478,7 @@ func TestFamilyUsecase_ApplyToFamily_ExpiredToken(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_TokenGenerationError(t *testing.T) {
-	ctx, _, fmr, fir, ur, _, tg, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, tg, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-123"
 	familyID := uuid.New()
@@ -499,7 +503,7 @@ func TestFamilyUsecase_ApplyToFamily_TokenGenerationError(t *testing.T) {
 }
 
 func TestFamilyUsecase_ApplyToFamily_InvalidUser(t *testing.T) {
-	ctx, _, fmr, fir, ur, _, _, _, _, u := newTestEnv()
+	ctx, _, fmr, fir, ur, _, _, _, _, _, u := newTestEnv()
 	userID := uuid.New()
 	token := "tok-123"
 
