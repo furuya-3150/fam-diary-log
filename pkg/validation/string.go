@@ -3,6 +3,7 @@ package validation
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // NotEmpty validates that a string value is not empty
@@ -15,7 +16,7 @@ func NotEmpty(value, fieldName string) error {
 
 // MaxLength validates that a string value does not exceed the maximum length
 func MaxLength(value string, max int, fieldName string) error {
-	if len(value) > max {
+	if utf8.RuneCountInString(value) > max {
 		return fmt.Errorf("%s は%d文字以内でなければなりません", fieldName, max)
 	}
 	return nil
@@ -23,7 +24,7 @@ func MaxLength(value string, max int, fieldName string) error {
 
 // MinLength validates that a string value meets the minimum length
 func MinLength(value string, min int, fieldName string) error {
-	if len(value) < min {
+	if utf8.RuneCountInString(value) < min {
 		return fmt.Errorf("%s は%d文字以上でなければなりません", fieldName, min)
 	}
 	return nil
