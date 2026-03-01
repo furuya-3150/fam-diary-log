@@ -1,0 +1,49 @@
+-- =========================
+-- DATABASES
+-- =========================
+CREATE DATABASE diary;
+CREATE DATABASE diary_analyze;
+CREATE DATABASE user_context;
+CREATE DATABASE test_diary;
+CREATE DATABASE test_diary_analyze;
+CREATE DATABASE test_user_context;
+
+-- =========================
+-- USERS
+-- =========================
+CREATE USER diary_user WITH PASSWORD 'xxxxx';
+CREATE USER diary_analyze_user WITH PASSWORD 'xxxxx';
+CREATE USER user_context_user WITH PASSWORD 'xxxxx';
+
+-- =========================
+-- REVOKE PUBLIC ACCESS
+-- =========================
+REVOKE ALL ON DATABASE diary FROM PUBLIC;
+REVOKE ALL ON DATABASE diary_analyze FROM PUBLIC;
+REVOKE ALL ON DATABASE user_context FROM PUBLIC;
+
+-- =========================
+-- GRANT CONNECT (DB level)
+-- =========================
+GRANT CONNECT ON DATABASE diary TO diary_user;
+GRANT CONNECT ON DATABASE diary_analyze TO diary_analyze_user;
+GRANT CONNECT ON DATABASE user_context TO user_context_user;
+
+-- postgres は自動的に全権限を持つため GRANT 不要
+-- =========================
+-- SCHEMA PERMISSIONS
+-- =========================
+-- diary
+\connect diary
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO diary_user;
+
+-- diary_analyze
+\connect diary_analyze
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO diary_analyze_user;
+
+-- user_context
+\connect user_context
+REVOKE ALL ON SCHEMA public FROM PUBLIC;
+GRANT ALL ON SCHEMA public TO user_context_user;

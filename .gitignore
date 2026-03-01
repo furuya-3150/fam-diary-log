@@ -1,7 +1,7 @@
 .env
 .DS_Store
 
-docker/*
+01_init.sql
 
 # TODO: ドキュメント整理後コミット
 doc/*
