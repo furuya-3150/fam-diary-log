@@ -435,8 +435,9 @@ func TestDiaryUsecaseCreateAlreadyPostedToday(t *testing.T) {
 	existing := &domain.Diary{ID: uuid.New(), UserID: userID, FamilyID: familyID, Title: "old", Content: "old", WritingTimeSeconds: 120}
 
 	// Expect List called to check today's diaries and return one
-	expectedStart := time.Date(2026, 2, 3, 0, 0, 0, 0, time.UTC)
-	expectedEnd := time.Date(2026, 2, 3, 23, 59, 59, 0, time.UTC)
+	jst, _ := time.LoadLocation("Asia/Tokyo")
+	expectedStart := time.Date(2026, 2, 3, 0, 0, 0, 0, jst)
+	expectedEnd := time.Date(2026, 2, 3, 23, 59, 59, 0, jst)
 	mockRepo.On("List", mock.Anything, mock.MatchedBy(func(c *domain.DiarySearchCriteria) bool {
 		return c.FamilyID == familyID && c.UserID == userID && c.StartDate.Equal(expectedStart) && c.EndDate.Equal(expectedEnd)
 	}), mock.Anything).Return([]*domain.Diary{existing}, nil)

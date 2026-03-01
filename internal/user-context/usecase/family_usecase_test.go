@@ -235,7 +235,7 @@ func TestFamilyUsecase_CreateFamily_TokenGenerationError(t *testing.T) {
 	family := &domain.Family{ID: uuid.New(), Name: "TestFamily"}
 	fr.On("CreateFamily", ctx, mock.AnythingOfType("*domain.Family")).Return(family, nil)
 	fmr.On("AddFamilyMember", ctx, mock.AnythingOfType("*domain.FamilyMember")).Return(nil)
-	tm.On("CommitTx", ctx).Return(nil)
+	tm.On("RollbackTx", ctx).Return(nil)
 	tg.On("GenerateToken", ctx, mock.Anything, mock.Anything, mock.Anything).Return("", errors.New("token generation error"))
 
 	_, _, err := u.CreateFamily(ctx, "TestFamily", userID)
