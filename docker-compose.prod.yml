@@ -105,8 +105,8 @@ services:
     profiles:
       - migrate
     environment:
-      - DIARY_DATABASE_URL=postgres://${DIARY_DB_USER}:${DIARY_DB_PASSWORD}@db:5432/diary?sslmode=disable
-      - DIARY_ANALYZER_DATABASE_URL=postgres://${DIARY_ANALYZER_DB_USER}:${DIARY_ANALYZER_DB_PASSWORD}@db:5432/diary_analyze?sslmode=disable
-      - USER_CONTEXT_DATABASE_URL=postgres://${USER_CONTEXT_DB_USER}:${USER_CONTEXT_DB_PASSWORD}@db:5432/user_context?sslmode=disable
+      - DIARY_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/diary?sslmode=disable
+      - DIARY_ANALYZER_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/diary_analyze?sslmode=disable
+      - USER_CONTEXT_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/user_context?sslmode=disable
     depends_on:
       - db
