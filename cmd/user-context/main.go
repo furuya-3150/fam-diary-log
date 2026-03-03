@@ -54,12 +54,10 @@ func init() {
 
 	logger := slog.New(handler)
 	slog.SetDefault(logger)
-	if os.Getenv("GO_ENV") == "dev" {
-		err := godotenv.Load("./cmd/user-context/.env")
-		if err != nil {
-			slog.Error("Error loading .env file", "Error", err.Error())
-			os.Exit(1)
-		}
+	err = godotenv.Load("./cmd/user-context/.env")
+	if err != nil {
+		slog.Error("Error loading .env file", "Error", err.Error())
+		os.Exit(1)
 	}
 
 	// config読み込み
