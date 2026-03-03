@@ -55,12 +55,10 @@ func init() {
 	slog.SetDefault(logger)
 
 	// env読み込み
-	if os.Getenv("GO_ENV") == "dev" {
-		err := godotenv.Load("./cmd/diary-api/.env")
-		if err != nil {
-			slog.Error("Error loading .env file", "Error", err.Error())
-			os.Exit(1)
-		}
+	err = godotenv.Load("./cmd/diary-api/.env")
+	if err != nil {
+		slog.Error("Error loading .env file", "Error", err.Error())
+		os.Exit(1)
 	}
 
 	// config読み込み

@@ -32,8 +32,10 @@ func init() {
 	slog.SetDefault(log)
 
 	// env読み込み
-	if os.Getenv("GO_ENV") == "dev" {
-		_ = godotenv.Load("./cmd/diary-analyzer/.env")
+	err := godotenv.Load("./cmd/diary-analyzer/.env")
+	if err != nil {
+		slog.Error("Error loading .env file", "Error", err.Error())
+		os.Exit(1)
 	}
 }
 
