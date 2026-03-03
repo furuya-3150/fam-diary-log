@@ -27,10 +27,12 @@ func init() {
 	}
 	slog.SetDefault(log)
 
-	err := godotenv.Load("./cmd/diary-mailer/.env")
-	if err != nil {
-		slog.Error("Error loading .env file", "Error", err.Error())
-		os.Exit(1)
+	if os.Getenv("GO_ENV") == "dev" {
+		err := godotenv.Load("./cmd/diary-mailer/.env")
+		if err != nil {
+			slog.Error("Error loading .env file", "Error", err.Error())
+			os.Exit(1)
+		}
 	}
 }
 
