@@ -11,11 +11,13 @@ func loadApp() AppConfig {
 }
 
 type ClientAppConfig struct {
-	URL string
+	URL    string
+	Domain string
 }
 
 func loadClientApp() ClientAppConfig {
 	return ClientAppConfig{
-		URL: getEnv("CLIENT_APP_URL", "http://localhost:3000"),
+		URL:    getEnv("CLIENT_APP_URL", "http://localhost:3000"),
+		Domain: getEnv("CLIENT_DOMAIN", "localhost:3000"),
 	}
 }

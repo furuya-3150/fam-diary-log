@@ -56,6 +56,7 @@ func (h *familyHandler) CreateFamily(c echo.Context) error {
 	cfg := config.Cfg
 
 	c.SetCookie(&http.Cookie{
+		Domain:  cfg.ClientApp.Domain,
 		Name:     auth.AuthCookieName,
 		Value:    accessToken,
 		Path:     "/",

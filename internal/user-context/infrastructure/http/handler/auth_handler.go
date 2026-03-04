@@ -99,7 +99,7 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 
 	// Set access token in HTTPOnly Cookie
 	c.SetCookie(&http.Cookie{
-		Domain:  cfg.ClientApp.URL,
+		Domain:  cfg.ClientApp.Domain,
 		Name:     auth.AuthCookieName,
 		Value:    accessToken,
 		Path:     "/",
@@ -145,6 +145,7 @@ func (h *authHandler) Refresh(c echo.Context) error {
 
 	// Overwrite access token cookie
 	c.SetCookie(&http.Cookie{
+		Domain:  cfg.ClientApp.Domain,
 		Name:     auth.AuthCookieName,
 		Value:    newAccessToken,
 		Path:     "/",
