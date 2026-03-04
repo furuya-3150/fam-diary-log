@@ -99,6 +99,7 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 
 	// Set access token in HTTPOnly Cookie
 	c.SetCookie(&http.Cookie{
+		Domain:  cfg.ClientApp.URL,
 		Name:     auth.AuthCookieName,
 		Value:    accessToken,
 		Path:     "/",
