@@ -47,3 +47,26 @@ GRANT ALL ON SCHEMA public TO diary_analyze_user;
 \connect user_context
 REVOKE ALL ON SCHEMA public FROM PUBLIC;
 GRANT ALL ON SCHEMA public TO user_context_user;
+
+-- =========================
+-- DB PERMISSIONS
+-- =========================
+\connect diary
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+IN SCHEMA public
+GRANT ALL ON TABLES TO diary_user;
+
+-- diary_analyze
+\connect diary_analyze
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+IN SCHEMA public
+GRANT ALL ON TABLES TO diary_analyze_user;
+
+-- user_context
+\connect user_context
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres
+IN SCHEMA public
+GRANT ALL ON TABLES TO user_context_user;
