@@ -3,12 +3,15 @@ package handler
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/config"
 	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller"
+	"github.com/furuya-3150/fam-diary-log/internal/user-context/infrastructure/http/controller/dto"
 	"github.com/furuya-3150/fam-diary-log/pkg/errors"
 	pkgerrors "github.com/furuya-3150/fam-diary-log/pkg/errors"
 	"github.com/furuya-3150/fam-diary-log/pkg/middleware/auth"
+	"github.com/furuya-3150/fam-diary-log/pkg/response"
 	"github.com/labstack/echo-contrib/session"
 	"github.com/labstack/echo/v4"
 )
@@ -111,6 +114,7 @@ func (h *authHandler) GoogleCallback(c echo.Context) error {
 
 	// Set refresh token in HTTPOnly Cookie (longer-lived, restricted to refresh endpoint)
 	c.SetCookie(&http.Cookie{
+		Domain:  cfg.ClientApp.Domain,
 		Name:  refreshCookieName,
 		Value: refreshToken,
 		Path:     "/auth/refresh",
@@ -157,6 +161,7 @@ func (h *authHandler) Refresh(c echo.Context) error {
 
 	// Rotate refresh token cookie
 	c.SetCookie(&http.Cookie{
+		Domain:  cfg.ClientApp.Domain,
 		Name:     refreshCookieName,
 		Value:    newRefreshToken,
 		Path:     "/auth/refresh",
@@ -166,5 +171,8 @@ func (h *authHandler) Refresh(c echo.Context) error {
 		MaxAge:   int(cfg.JWT.RefreshExpiresIn.Seconds()),
 	})
 
-	return c.NoContent(http.StatusNoContent)
+	res := dto.RefreshResponse{
+		ExpiresAt: int(time.Now().Add(cfg.JWT.ExpiresIn).Unix()),
+	}
+	return response.RespondSuccess(c, http.StatusOK, res)
 }

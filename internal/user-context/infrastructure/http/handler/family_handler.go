@@ -67,6 +67,7 @@ func (h *familyHandler) CreateFamily(c echo.Context) error {
 	})
 
 	c.SetCookie(&http.Cookie{
+		Domain:  cfg.ClientApp.Domain,
 		Name:  refreshCookieName,
 		Value: refreshToken,
 		Path:     "/auth/refresh",
