@@ -10,11 +10,11 @@ jobs:
   detect-changes:
     runs-on: ubuntu-latest
     outputs:
-      diary-api:      ${{ steps.filter.outputs.diary-api }}
+      diary-api: ${{ steps.filter.outputs.diary-api }}
       diary-analyzer: ${{ steps.filter.outputs.diary-analyzer }}
       diary-analysis: ${{ steps.filter.outputs.diary-analysis }}
-      user-context:   ${{ steps.filter.outputs.user-context }}
-      diary-mailer:   ${{ steps.filter.outputs.diary-mailer }}
+      user-context: ${{ steps.filter.outputs.user-context }}
+      diary-mailer: ${{ steps.filter.outputs.diary-mailer }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -74,7 +74,7 @@ jobs:
           context: .
           file: Dockerfile
           target: prod-diary-api
-          push: false
+          push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:${{ github.sha }}
