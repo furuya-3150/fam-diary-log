@@ -1,0 +1,163 @@
+name: docker-publish
+
+on:
+  push:
+    branches:
+      - "**"
+
+jobs:
+  # どのコンポーネントに変更があったかを検出する
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      diary-api:      ${{ steps.filter.outputs.diary-api }}
+      diary-analyzer: ${{ steps.filter.outputs.diary-analyzer }}
+      diary-analysis: ${{ steps.filter.outputs.diary-analysis }}
+      user-context:   ${{ steps.filter.outputs.user-context }}
+      diary-mailer:   ${{ steps.filter.outputs.diary-mailer }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            diary-api:
+              - 'cmd/diary-api/**'
+              - 'internal/diary/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            diary-analyzer:
+              - 'cmd/diary-analyzer/**'
+              - 'internal/diary-analyzer/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            diary-analysis:
+              - 'cmd/diary-analysis/**'
+              - 'internal/diary-analysis/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            user-context:
+              - 'cmd/user-context/**'
+              - 'internal/user-context/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            diary-mailer:
+              - 'cmd/diary-mailer/**'
+              - 'internal/diary-mailer/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+
+  push-diary-api:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-api
+          push: false
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:${{ github.sha }}
+
+  push-diary-analyzer:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-analyzer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-analyzer
+          push: false
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:${{ github.sha }}
+
+  push-diary-analysis:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-analysis == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-analysis
+          push: false
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:${{ github.sha }}
+
+  push-user-context:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.user-context == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-user-context
+          push: false
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:${{ github.sha }}
+
+  push-diary-mailer:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-mailer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-mailer
+          push: false
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:${{ github.sha }}
