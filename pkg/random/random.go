@@ -5,8 +5,7 @@ import (
 	"encoding/base64"
 )
 
-// GenerateRandomBase64String generates a cryptographically secure random string
-// encoded in Base64 URL format with the specified number of bytes of randomness
+// GenerateRandomBase64String generates a random string of the specified length and encodes it in base64
 func GenerateRandomBase64String(length int) (string, error) {
 	b := make([]byte, length)
 	_, err := rand.Read(b)
