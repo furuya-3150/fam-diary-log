@@ -95,7 +95,7 @@ jobs:
           context: .
           file: Dockerfile
           target: prod-diary-analyzer
-          push: false
+          push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:${{ github.sha }}
@@ -116,7 +116,7 @@ jobs:
           context: .
           file: Dockerfile
           target: prod-diary-analysis
-          push: false
+          push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:${{ github.sha }}
@@ -137,7 +137,7 @@ jobs:
           context: .
           file: Dockerfile
           target: prod-user-context
-          push: false
+          push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:${{ github.sha }}
@@ -158,7 +158,7 @@ jobs:
           context: .
           file: Dockerfile
           target: prod-diary-mailer
-          push: false
+          push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:${{ github.sha }}
