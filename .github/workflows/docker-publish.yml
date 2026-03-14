@@ -162,3 +162,78 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:${{ github.sha }}
+
+  deploy-diary-api:
+    needs: push-diary-api
+    if: needs.push-diary-api.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-api
+            docker compose -f docker-compose.prod.yml up -d diary-api
+
+  deploy-diary-analyzer:
+    needs: push-diary-analyzer
+    if: needs.push-diary-analyzer.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-analyzer
+            docker compose -f docker-compose.prod.yml up -d diary-analyzer
+
+  deploy-diary-analysis:
+    needs: push-diary-analysis
+    if: needs.push-diary-analysis.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-analysis
+            docker compose -f docker-compose.prod.yml up -d diary-analysis
+
+  deploy-user-context:
+    needs: push-user-context
+    if: needs.push-user-context.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull user-context
+            docker compose -f docker-compose.prod.yml up -d user-context
+
+  deploy-diary-mailer:
+    needs: push-diary-mailer
+    if: needs.push-diary-mailer.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-mailer
+            docker compose -f docker-compose.prod.yml up -d diary-mailer
