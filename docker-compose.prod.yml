@@ -33,7 +33,7 @@ services:
       timeout: 10s
 
   diary-api:
-    image: ${DOCKERHUB_USERNAME}/diary-api:latest
+    image: takumifuruya/diary-api:latest
     restart: always
     env_file:
       - ./cmd/diary-api/.env
@@ -44,7 +44,7 @@ services:
       - rabbitmq
 
   diary-analyzer:
-    image: ${DOCKERHUB_USERNAME}/diary-analyzer:latest
+    image: takumifuruya/diary-analyzer:latest
     restart: always
     env_file:
       - ./cmd/diary-analyzer/.env
@@ -53,7 +53,7 @@ services:
       - rabbitmq
 
   diary-analysis:
-    image: ${DOCKERHUB_USERNAME}/diary-analysis:latest
+    image: takumifuruya/diary-analysis:latest
     restart: always
     env_file:
       - ./cmd/diary-analysis/.env
@@ -64,7 +64,7 @@ services:
       - rabbitmq
 
   user-context:
-    image: ${DOCKERHUB_USERNAME}/user-context:latest
+    image: takumifuruya/user-context:latest
     restart: always
     env_file:
       - ./cmd/user-context/.env
@@ -75,7 +75,7 @@ services:
       - rabbitmq
 
   diary-mailer:
-    image: ${DOCKERHUB_USERNAME}/diary-mailer:latest
+    image: takumifuruya/diary-mailer:latest
     restart: always
     env_file:
       - ./cmd/diary-mailer/.env
