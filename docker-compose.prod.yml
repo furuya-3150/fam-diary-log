@@ -33,10 +33,7 @@ services:
       timeout: 10s
 
   diary-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod-diary-api
+    image: ${DOCKERHUB_USERNAME}/diary-api:latest
     restart: always
     env_file:
       - ./cmd/diary-api/.env
@@ -47,10 +44,7 @@ services:
       - rabbitmq
 
   diary-analyzer:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod-diary-analyzer
+    image: ${DOCKERHUB_USERNAME}/diary-analyzer:latest
     restart: always
     env_file:
       - ./cmd/diary-analyzer/.env
@@ -59,10 +53,7 @@ services:
       - rabbitmq
 
   diary-analysis:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod-diary-analysis
+    image: ${DOCKERHUB_USERNAME}/diary-analysis:latest
     restart: always
     env_file:
       - ./cmd/diary-analysis/.env
@@ -73,10 +64,7 @@ services:
       - rabbitmq
 
   user-context:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod-user-context
+    image: ${DOCKERHUB_USERNAME}/user-context:latest
     restart: always
     env_file:
       - ./cmd/user-context/.env
@@ -87,10 +75,7 @@ services:
       - rabbitmq
 
   diary-mailer:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: prod-diary-mailer
+    image: ${DOCKERHUB_USERNAME}/diary-mailer:latest
     restart: always
     env_file:
       - ./cmd/diary-mailer/.env
