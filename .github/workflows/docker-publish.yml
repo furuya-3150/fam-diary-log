@@ -3,7 +3,7 @@ name: docker-publish
 on:
   push:
     branches:
-      - "**"
+      - "main"
 
 jobs:
   # どのコンポーネントに変更があったかを検出する
