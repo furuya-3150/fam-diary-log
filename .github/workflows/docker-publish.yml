@@ -77,7 +77,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/diary-api:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api:${{ github.sha }}
 
   push-diary-analyzer:
     needs: detect-changes
