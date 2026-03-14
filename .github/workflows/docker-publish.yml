@@ -76,8 +76,8 @@ jobs:
           target: prod-diary-api
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api${{ github.sha }}
 
   push-diary-analyzer:
     needs: detect-changes
@@ -97,8 +97,8 @@ jobs:
           target: prod-diary-analyzer
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer:${{ github.sha }}
 
   push-diary-analysis:
     needs: detect-changes
@@ -118,8 +118,8 @@ jobs:
           target: prod-diary-analysis
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis:${{ github.sha }}
 
   push-user-context:
     needs: detect-changes
@@ -139,8 +139,8 @@ jobs:
           target: prod-user-context
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/user-context:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/user-context:${{ github.sha }}
 
   push-diary-mailer:
     needs: detect-changes
@@ -160,8 +160,8 @@ jobs:
           target: prod-diary-mailer
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer:${{ github.sha }}
 
   deploy-diary-api:
     needs: push-diary-api
