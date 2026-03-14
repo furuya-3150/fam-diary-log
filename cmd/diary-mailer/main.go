@@ -37,6 +37,7 @@ func init() {
 }
 
 func main() {
+	slog.Info("starting mail service")
 	ctx := context.Background()
 	log := slog.Default()
 
