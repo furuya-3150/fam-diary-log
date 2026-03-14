@@ -1,0 +1,239 @@
+name: docker-publish
+
+on:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  # どのコンポーネントに変更があったかを検出する
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      diary-api: ${{ steps.filter.outputs.diary-api }}
+      diary-analyzer: ${{ steps.filter.outputs.diary-analyzer }}
+      diary-analysis: ${{ steps.filter.outputs.diary-analysis }}
+      user-context: ${{ steps.filter.outputs.user-context }}
+      diary-mailer: ${{ steps.filter.outputs.diary-mailer }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          base: ${{ github.event.before || 'HEAD~1' }}
+          filters: |
+            diary-api:
+              - 'cmd/diary-api/**'
+              - 'internal/diary/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            diary-analyzer:
+              - 'cmd/diary-analyzer/**'
+              - 'internal/diary-analyzer/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            diary-analysis:
+              - 'cmd/diary-analysis/**'
+              - 'internal/diary-analysis/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            user-context:
+              - 'cmd/user-context/**'
+              - 'internal/user-context/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+            diary-mailer:
+              - 'cmd/diary-mailer/**'
+              - 'internal/diary-mailer/**'
+              - 'pkg/**'
+              - 'go.mod'
+              - 'go.sum'
+              - 'Dockerfile'
+
+  push-diary-api:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-api == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-api
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-api-test:${{ github.sha }}
+
+  push-diary-analyzer:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-analyzer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-analyzer
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analyzer-test:${{ github.sha }}
+
+  push-diary-analysis:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-analysis == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-analysis
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-analysis-test:${{ github.sha }}
+
+  push-user-context:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.user-context == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-user-context
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/user-context-test:${{ github.sha }}
+
+  push-diary-mailer:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.diary-mailer == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          target: prod-diary-mailer
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/diary-mailer-test:${{ github.sha }}
+
+  deploy-diary-api:
+    needs: push-diary-api
+    if: needs.push-diary-api.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-api
+            docker compose -f docker-compose.prod.yml up -d diary-api
+
+  deploy-diary-analyzer:
+    needs: push-diary-analyzer
+    if: needs.push-diary-analyzer.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-analyzer
+            docker compose -f docker-compose.prod.yml up -d diary-analyzer
+
+  deploy-diary-analysis:
+    needs: push-diary-analysis
+    if: needs.push-diary-analysis.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-analysis
+            docker compose -f docker-compose.prod.yml up -d diary-analysis
+
+  deploy-user-context:
+    needs: push-user-context
+    if: needs.push-user-context.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull user-context
+            docker compose -f docker-compose.prod.yml up -d user-context
+
+  deploy-diary-mailer:
+    needs: push-diary-mailer
+    if: needs.push-diary-mailer.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_SERVER_HOST }}
+          username: ${{ secrets.PROD_SERVER_USER }}
+          key: ${{ secrets.PROD_SERVER_SSH_KEY }}
+          script: |
+            cd /home/deploy/fam-diary-log-api
+            docker compose -f docker-compose.prod.yml pull diary-mailer
+            docker compose -f docker-compose.prod.yml up -d diary-mailer
