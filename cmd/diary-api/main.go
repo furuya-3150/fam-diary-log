@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	slog.Info("Starting diary API server...")
+	slog.Info("Starting diary API server... 123")
 	e := http.NewRouter()
 
 	e.Logger.Fatal(e.Start(":8080"))
