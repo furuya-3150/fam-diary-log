@@ -13,7 +13,7 @@ type SuccessResponse struct {
 // RespondSuccess sends a standardized success response
 func RespondSuccess(c echo.Context, statusCode int, data interface{}) error {
 	if statusCode == http.StatusNoContent {
-		return c.JSON(statusCode, nil)
+		return c.NoContent(http.StatusNoContent)
 	}
 	return c.JSON(statusCode, SuccessResponse{
 		Data: data,
