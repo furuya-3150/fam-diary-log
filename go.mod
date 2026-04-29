@@ -1,6 +1,6 @@
 module github.com/furuya-3150/fam-diary-log
 
-go 1.25.0
+go 1.26.2
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.0

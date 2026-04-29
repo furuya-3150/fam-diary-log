@@ -13,13 +13,13 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.25.6"
+          go-version: "1.26.2"
 
       - run: go mod download
       - run: go mod tidy
 
       - name: set env
-        run: go env -w GOTOOLCHAIN=go1.25.1+auto
+        run: go env -w GOTOOLCHAIN=go1.26.2+auto
 
       # run all tests with coverage
       - run: go test ./... -v -short -coverprofile=coverage.out
@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.25"
+          go-version: "1.26.2"
       - run: go build ./...
 
   mod-tidy-check:
@@ -47,7 +47,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.25"
+          go-version: "1.26.2"
       - run: go mod tidy
       - name: Check for changes in go.mod/go.sum
         run: |
@@ -59,7 +59,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v4
         with:
-          go-version: "1.25.7"
+          go-version: "1.26.2"
       - run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - run: $(go env GOPATH)/bin/govulncheck ./...
 
