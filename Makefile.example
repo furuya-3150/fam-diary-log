@@ -1,11 +1,47 @@
-MIGRATE_PATH=setup/db/migrations
-DATABASE_URL=postgres://user_name:password@host_name:port/db_name?sslmode=disable
+# ---------------
+# diary migration
+# ---------------
 
-migrate-up:
-	migrate -path $(MIGRATE_PATH) -database "$(DATABASE_URL)" up
+DIARY_MIGRATE_PATH=setup/db/migrations/diary
+DIARY_DATABASE_URL=postgres://postgres:xxxxx@db:5432/diary?sslmode=disable
+# DIARY_DATABASE_URL=postgres://postgres:xxxxx@db:5432/test_diary?sslmode=disable
 
-migrate-down:
-	migrate -path $(MIGRATE_PATH) -database "$(DATABASE_URL)" down 1
+migrate-up-diary:
+	migrate -path $(DIARY_MIGRATE_PATH) -database "$(DIARY_DATABASE_URL)" up
 
-migrate-force:
-	migrate -path $(MIGRATE_PATH) -database "$(DATABASE_URL)" force $(v)
+migrate-down-diary:
+	migrate -path $(DIARY_MIGRATE_PATH) -database "$(DIARY_DATABASE_URL)" down 1
+
+migrate-force-diary:
+	migrate -path $(DIARY_MIGRATE_PATH) -database "$(DIARY_DATABASE_URL)" force $(v)
+
+
+# ------------------------
+# diary analyzer migration
+# ------------------------
+DIARY_ANALYZER_MIGRATE_PATH=setup/db/migrations/diary-analyzer
+DIARY_ANALYZER_DATABASE_URL=postgres://postgres:xxxxx@db:5432/diary_analyze?sslmode=disable
+# DIARY_ANALYZER_DATABASE_URL=postgres://postgres:xxxxx@db:5432/test_diary_analyze?sslmode=disable
+
+migrate-up-diary-analyzer:
+	migrate -path $(DIARY_ANALYZER_MIGRATE_PATH) -database "$(DIARY_ANALYZER_DATABASE_URL)" up
+
+migrate-down-diary-analyzer:
+	migrate -path $(DIARY_ANALYZER_MIGRATE_PATH) -database "$(DIARY_ANALYZER_DATABASE_URL)" down 1
+
+migrate-force-diary-analyzer:
+	migrate -path $(DIARY_ANALYZER_MIGRATE_PATH) -database "$(DIARY_ANALYZER_DATABASE_URL)" force $(v)
+
+# ------------------------
+# user context migration
+# ------------------------
+USER_CONTEXT_MIGRATE_PATH=setup/db/migrations/user-context
+# USER_CONTEXT_DATABASE_URL=postgres://postgres:xxxxx@db:5432/user_context?sslmode=disable
+USER_CONTEXT_DATABASE_URL=postgres://postgres:xxxxx@db:5432/test_user_context?sslmode=disable
+
+migrate-up-user-context:
+	migrate -path $(USER_CONTEXT_MIGRATE_PATH) -database "$(USER_CONTEXT_DATABASE_URL)" up
+migrate-down-user-context:
+	migrate -path $(USER_CONTEXT_MIGRATE_PATH) -database "$(USER_CONTEXT_DATABASE_URL)" down 1
+migrate-force-user-context:
+	migrate -path $(USER_CONTEXT_MIGRATE_PATH) -database "$(USER_CONTEXT_DATABASE_URL)" force $(v)

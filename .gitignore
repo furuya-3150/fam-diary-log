@@ -5,7 +5,6 @@
 
 # TODO: ドキュメント整理後コミット
 doc/*
-README.md
 Makefile
 
 tmp/*
